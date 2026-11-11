@@ -8,16 +8,17 @@ from pathlib import Path
 from collector import validate
 from audit import inspect_stored, inspect
 from product_catalogue import lookup_barcode
+from catalogue_sources import lookup_product, observation, merge_observations, FIELDS
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.7',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.7 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
-st.warning('No live Amazon API. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
+st.caption('V1.8 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
-    'Stored observations', 'Data readiness', 'Product catalogue', 'Demand intelligence',
+    'Stored observations', 'Data readiness', 'Product catalogue', 'Free data integration', 'Demand intelligence',
     'Profitability scenarios', 'Competition analysis', 'Method & safeguards'
 ]
 with st.sidebar:
@@ -151,6 +152,60 @@ if page == 'Product catalogue':
             st.warning('Amazon sales, selling price, fees, product restrictions and 12-month demand are NOT verified by this source.')
         except Exception as exc:st.error(f'Catalogue lookup unavailable: {exc}')
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
+if page == 'Free data integration':
+    st.subheader('Free data integration centre')
+    st.info('Live barcode identity lookups are available on demand. Neither provider supplies Amazon prices, sales, rankings or resale eligibility. No paid credentials required.')
+    st.write('**Sources:** [UPCitemdb](https://www.upcitemdb.com/api) (general retail catalogue, public trial endpoint) and [Open Food Facts](https://world.openfoodfacts.org/) (primarily foods). Provider rate limits, coverage and terms apply. UPCitemdb free usage can change.')
+    source=st.selectbox('Catalogue provider', ['UPCitemdb','Open Food Facts'])
+    code=st.text_input('Barcode (8–14 digits)',key='v18_code')
+    if 'catalogue_observations' not in st.session_state:
+        st.session_state.catalogue_observations=[]
+    if st.button('Fetch live product metadata',type='primary'):
+        try:
+            result=lookup_product(code,source)
+            if result['found']:
+                st.session_state.catalogue_observations.append(observation(result))
+                st.success('Product metadata found and added to this session’s export list.')
+            else:
+                st.info('No exact matching barcode record was returned.')
+            st.session_state.last_catalogue_result=result
+        except Exception as exc:
+            st.error(f'Lookup failed: {exc}. Check the barcode, provider availability or rate limits.')
+    result=st.session_state.get('last_catalogue_result')
+    if result:
+        st.write('**Last result:**',{'source':result['source'],'barcode':result['barcode'],
+                                     'found':result['found'],'name':result.get('name',''),
+                                     'brand':result.get('brand','')})
+        st.markdown(f"[Open provider record]({result['source_url']})")
+    st.divider()
+    st.write('**Exportable dated catalogue observations**')
+    st.warning('Session records are temporary on Render. Download the CSV and commit it to `data/catalogue_observations.csv` in GitHub for persistence. Uploading or viewing a CSV does not automatically save it to GitHub.')
+    uploaded=st.file_uploader('Optional: merge a previous catalogue observations CSV',type=['csv'],key='v18_merge')
+    try:
+        base=pd.read_csv(uploaded) if uploaded is not None else pd.DataFrame(columns=FIELDS)
+        if not set(FIELDS).issubset(base.columns):
+            raise ValueError('Uploaded file does not match the V1.8 catalogue observation format.')
+        merged=base[FIELDS].copy()
+        for record in st.session_state.catalogue_observations:
+            merged=merge_observations(merged,record)
+        st.metric('Exportable catalogue observations',len(merged))
+        if not merged.empty:
+            st.dataframe(merged,use_container_width=True,hide_index=True)
+        st.download_button('Download observations CSV',merged.to_csv(index=False),
+                           'catalogue_observations.csv','text/csv',key='v18_export')
+    except Exception as exc:
+        st.error(f'Could not merge observations: {exc}')
+    stored_catalogue=Path('data/catalogue_observations.csv')
+    if stored_catalogue.exists():
+        try:
+            saved=pd.read_csv(stored_catalogue)
+            st.caption(f'Repository-stored catalogue observations: {len(saved)} rows. Download and merge this file before recording more observations.')
+            st.download_button('Download repository catalogue CSV',stored_catalogue.read_bytes(),
+                               'catalogue_observations.csv','text/csv',key='v18_stored')
+        except Exception as exc:
+            st.error(f'Could not read repository catalogue CSV: {exc}')
+    st.caption('These records document product identities, not historical Amazon market prices or sales. Keepa adapter is a future integration, not connected in V1.8.')
+
 if page == 'Demand intelligence':
     st.subheader('12-month demand intelligence (observed proxy data)')
     st.write('Measures completeness, variation and possible spikes in a documented 0–100 demand proxy. It cannot establish actual sales, annual seasonality or future demand.')
@@ -169,11 +224,11 @@ if page == 'Demand intelligence':
         except Exception as exc: st.error(f'Could not analyse demand history: {exc}')
     else: st.info('Upload real observations or configure an authorised feed. No historical observations have been fabricated.')
 if page == 'Method & safeguards':
-    st.subheader('What V1.7 does and does not do')
+    st.subheader('What V1.8 does and does not do')
     st.markdown('''- **Free research:** accepts user-provided CSV research and optionally queries Open Food Facts for live barcode metadata; no paid API key.\n- **No Amazon scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No backfilled history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Storage:** GitHub-committed CSV files persist across Render restarts; uploaded files remain temporary unless separately committed. Do not commit private data to a public repository.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')
 
 if page == 'Profitability scenarios':
-    st.subheader('V1.7 product profitability scenarios')
+    st.subheader('V1.8 product profitability scenarios')
     st.warning('Research-only calculator. All fees, VAT treatment and costs are operator-entered assumptions, not live Amazon quotes. Do not treat a passing result as permission or advice to buy.')
     market=st.selectbox('Marketplace scenario', ['Amazon UK', 'Amazon Ireland'])
     st.caption('All figures must be in EUR. For UK GBP figures, convert externally using a documented exchange rate and account for currency conversion charges. Fees and tax treatment differ by seller, product, fulfilment and country.')

@@ -40,3 +40,12 @@ The **Profitability scenarios** tab accepts user-entered EUR prices and costs, p
 ## V1.7: Vertical sidebar and competition research
 
 All V1.6 workspaces are accessible through a **left sidebar** instead of crowded horizontal tabs. A new **Overview** workspace shows stored research readiness and key safeguards. The new **Competition analysis** workspace accepts manually sourced snapshots (market, ASIN, date, listing count, median competitor price and review count), validates inputs, and produces explicitly heuristic pressure labels and CSV export. No Amazon API, actual sales estimates, live competition collection, automatic purchases, or buying recommendations are implied. The sample CSV is illustrative, not real market data.
+
+
+## V1.8: Free data integration centre
+
+- **UPCitemdb** public trial barcode lookup added as an optional, operator-triggered source; no account or key required for the public trial endpoint. Coverage, rate limits and access conditions may change. Open Food Facts remains available.
+- Both sources supply **product identity only**. They do **not** supply Amazon UK/IE prices, BSR, sales, seller restrictions, 12-month demand or sourcing costs.
+- Each successful lookup can be exported with a UTC timestamp and source URL as `catalogue_observations.csv`. Previous exports can be uploaded and merged with de-duplication.
+- **Persistence warning:** Render session state and local runtime files are ephemeral. Download the CSV and commit it to `data/catalogue_observations.csv` in GitHub to retain it across deployments. The app does not automatically write to GitHub.
+- Future Keepa integration is planned but **not** connected. No automatic Amazon scraping, purchasing or buying recommendations.
