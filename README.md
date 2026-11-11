@@ -36,3 +36,7 @@ The **Demand intelligence** tab analyses user-provided, sourced monthly 0–100 
 ## V1.6: Profitability scenario calculator
 
 The **Profitability scenarios** tab accepts user-entered EUR prices and costs, percentage referral fee, fulfilment, inbound shipping, packaging, other costs, returns reserve, and simplified VAT assumptions. It displays net profit, ROI on purchase cost, margin, break-even price, a threshold screen and CSV export. No live Amazon fee or tax API is connected; defaults are **illustrative assumptions, not current official rates**. VAT recoverability must be legally established and this model only adjusts the purchase cost, not other input VAT. UK inputs must be converted to EUR consistently. No automatic purchases or verified buy recommendations.
+
+## V1.7: Vertical sidebar and competition research
+
+All V1.6 workspaces are accessible through a **left sidebar** instead of crowded horizontal tabs. A new **Overview** workspace shows stored research readiness and key safeguards. The new **Competition analysis** workspace accepts manually sourced snapshots (market, ASIN, date, listing count, median competitor price and review count), validates inputs, and produces explicitly heuristic pressure labels and CSV export. No Amazon API, actual sales estimates, live competition collection, automatic purchases, or buying recommendations are implied. The sample CSV is illustrative, not real market data.

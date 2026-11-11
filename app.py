@@ -3,6 +3,7 @@ import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
 from profitability import calculate, screen
+from competition import assess_competition, REQUIRED_COMPETITION
 from pathlib import Path
 from collector import validate
 from audit import inspect_stored, inspect
@@ -10,21 +11,50 @@ from product_catalogue import lookup_barcode
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.6',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.7',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.6 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.7 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
+NAVIGATION = [
+    'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
+    'Stored observations', 'Data readiness', 'Product catalogue', 'Demand intelligence',
+    'Profitability scenarios', 'Competition analysis', 'Method & safeguards'
+]
 with st.sidebar:
-    st.header('Settings')
-    budget=st.slider('Reselling budget (€)',500,1000,750,50)
-    markets=st.multiselect('Market', ['UK','IE'],default=['UK','IE'])
-    st.caption('All monetary inputs in EUR. UK prices must be converted consistently before upload. A checked box or verified=true is not independent verification.')
+    st.header('Navigation')
+    page = st.radio('Choose a workspace', NAVIGATION, label_visibility='collapsed')
+    st.divider()
+    st.subheader('Research settings')
+    budget = st.slider('Reselling budget (€)', 500, 1000, 750, 50)
+    markets = st.multiselect('Market', ['UK', 'IE'], default=['UK', 'IE'])
+    st.caption('Amounts are EUR. UK prices require documented conversion. Data marked verified by an operator is not independently verified.')
+
+if page == 'Overview':
+    st.subheader('Research overview')
+    st.info('Research-only dashboard. No verified Amazon unit sales, product buy recommendations, or purchasing integration.')
+    overview, details = inspect_stored()
+    monthly_path = Path('data/monthly.csv')
+    product_count = 0
+    if monthly_path.exists():
+        try:
+            monthly = pd.read_csv(monthly_path)
+            if {'market','asin'}.issubset(monthly.columns):
+                product_count = len(monthly[monthly.market.isin(markets)][['market','asin']].drop_duplicates())
+        except Exception:
+            st.warning('Monthly data could not be read; use Data readiness for details.')
+    a,b,c = st.columns(3)
+    a.metric('Products with stored research', product_count)
+    b.metric('Research budget', f'€{budget:,}')
+    c.metric('Verified Amazon sales feed', 'Not connected')
+    st.write('**Stored data readiness**')
+    st.dataframe(overview, use_container_width=True, hide_index=True)
+    st.caption('Use the sidebar to open a research workspace. All profitability and competition results are scenario assessments, not verified investment opportunities.')
 
 def download_template(label,fields,filename,example):
     st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')
 
-t1,t2,t3,t4,t5,t6,t7,t8,t9=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Product catalogue','Demand intelligence','Profitability scenarios','Method & safeguards'])
-with t1:
+
+if page == '12-month research':
     st.subheader('Historical product research')
     st.write('Upload monthly research observations from a source you are permitted to use. The demand_index must be a consistent, documented 0–100 proxy. It is NOT units sold.')
     example={k:('UK' if k=='market' else 'B000EXAMPLE' if k=='asin' else 'Example product' if k=='product' else '2026-01' if k=='month' else 'Documented source URL and methodology' if k=='source' else False if k=='verified' else 50 if k in ['demand_index','competition_index'] else 0) for k in REQUIRED}
@@ -45,7 +75,7 @@ with t1:
             else:st.info('No usable observations in this upload.')
         except Exception as exc:st.error(f'Could not analyse research: {exc}')
     else:st.info('No research uploaded. No product recommendations available.')
-with t2:
+if page == 'Amazon rank snapshots':
     st.subheader('Amazon bestseller-rank observations')
     st.write('Upload manually recorded, dated public category-rank snapshots. Ranks from different categories are not directly comparable. A rank is NOT a sale count. This tab never issues a purchase recommendation.')
     download_template('Download rank snapshot CSV template',RANK_FIELDS,'rank_snapshot_template.csv',{'market':'UK','asin':'B000EXAMPLE','product':'Example product','observed_at':'2026-11-01','best_seller_rank':250,'category':'Home & Kitchen','source_url':'https://www.amazon.co.uk/'})
@@ -61,7 +91,7 @@ with t2:
                 st.download_button('Export rank research',summary.to_csv(index=False),'rank_research.csv','text/csv')
             else:st.info('No valid rank observations.')
         except Exception as exc:st.error(f'Invalid rank file: {exc}')
-with t3:
+if page == 'External search interest':
     st.subheader('Optional external search-interest research')
     st.write('Upload monthly 0–100 relative interest observations (for example, from an authorised manual Google Trends export). Search interest is not Amazon demand or actual purchases. UK and Ireland must be researched separately.')
     download_template('Download search interest CSV template',TREND_FIELDS,'search_interest_template.csv',{'market':'IE','keyword':'drawer organiser','month':'2026-01','search_interest':50,'source':'Manual Google Trends export, Ireland'})
@@ -77,7 +107,7 @@ with t3:
                 st.download_button('Export search interest',summary.to_csv(index=False),'search_interest_research.csv','text/csv')
             else:st.info('No valid search-interest observations.')
         except Exception as exc:st.error(f'Invalid interest file: {exc}')
-with t4:
+if page == 'Stored observations':
     st.subheader('Repository-backed observation history')
     st.write('GitHub Actions can collect authorised CSV feeds weekly and commit validated observations to the repository. Render then reads the committed files after redeployment. No feeds are configured by default.')
     for kind, filename in [('Monthly research','monthly.csv'),('Amazon rank snapshots','ranks.csv'),('External search interest','interest.csv')]:
@@ -90,7 +120,7 @@ with t4:
             except Exception as exc: st.error(f'Cannot read {filename}: {exc}')
         else: st.info(f'{kind}: no stored feed yet')
     st.caption('Scheduled runs do not manufacture historical observations. An authorised source must supply each dated record.')
-with t5:
+if page == 'Data readiness':
     st.subheader('Data readiness and coverage audit')
     st.write('This page verifies what is actually stored. It does not retrieve Amazon sales or claim a feed is configured.')
     overview,details=inspect_stored()
@@ -104,7 +134,7 @@ with t5:
     for kind,info in details.items():
         if 'error' in info: st.error(f'{kind}: {info["error"]}')
     st.info('To populate this audit, upload legitimately obtained observations or configure an authorised CSV feed in GitHub Actions. Without a feed, scheduled jobs collect nothing.')
-with t6:
+if page == 'Product catalogue':
     st.subheader('Live product identification (free, optional)')
     st.write('Look up a food product by barcode using the public Open Food Facts catalogue. This supplies real product identity information, **not Amazon UK or Ireland sales, prices, bestseller ranks, or resale eligibility**. No product is recommended for purchase from this lookup.')
     barcode=st.text_input('Product barcode (8–14 digits)',placeholder='e.g. barcode printed on packaging')
@@ -121,7 +151,7 @@ with t6:
             st.warning('Amazon sales, selling price, fees, product restrictions and 12-month demand are NOT verified by this source.')
         except Exception as exc:st.error(f'Catalogue lookup unavailable: {exc}')
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
-with t7:
+if page == 'Demand intelligence':
     st.subheader('12-month demand intelligence (observed proxy data)')
     st.write('Measures completeness, variation and possible spikes in a documented 0–100 demand proxy. It cannot establish actual sales, annual seasonality or future demand.')
     history_file = st.file_uploader('Upload monthly research CSV for demand analysis', type=['csv'], key='demand_history')
@@ -138,12 +168,12 @@ with t7:
             else: st.info('No valid observations in the current 12-month window.')
         except Exception as exc: st.error(f'Could not analyse demand history: {exc}')
     else: st.info('Upload real observations or configure an authorised feed. No historical observations have been fabricated.')
-with t9:
-    st.subheader('What V1.6 does and does not do')
+if page == 'Method & safeguards':
+    st.subheader('What V1.7 does and does not do')
     st.markdown('''- **Free research:** accepts user-provided CSV research and optionally queries Open Food Facts for live barcode metadata; no paid API key.\n- **No Amazon scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No backfilled history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Storage:** GitHub-committed CSV files persist across Render restarts; uploaded files remain temporary unless separately committed. Do not commit private data to a public repository.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')
 
-with t8:
-    st.subheader('V1.6 product profitability scenarios')
+if page == 'Profitability scenarios':
+    st.subheader('V1.7 product profitability scenarios')
     st.warning('Research-only calculator. All fees, VAT treatment and costs are operator-entered assumptions, not live Amazon quotes. Do not treat a passing result as permission or advice to buy.')
     market=st.selectbox('Marketplace scenario', ['Amazon UK', 'Amazon Ireland'])
     st.caption('All figures must be in EUR. For UK GBP figures, convert externally using a documented exchange rate and account for currency conversion charges. Fees and tax treatment differ by seller, product, fulfilment and country.')
@@ -180,3 +210,28 @@ with t8:
         st.caption('Not modelled: seller plan subscription, storage, long-term storage, advertising, returns processing, category-specific fee rules, duties, tax obligations, FX spreads, and cash-flow timing unless included in Other costs. VAT calculation is simplified and may not reflect your legal treatment. Verify Amazon fees and tax with official sources before any transaction.')
     except ValueError as exc:
         st.error(str(exc))
+
+if page == 'Competition analysis':
+    st.subheader('Competition and market saturation research')
+    st.warning('Manual, source-documented snapshots only. Seller counts and review counts are imperfect competition proxies; no live Amazon competitor data is connected.')
+    st.write('Upload a CSV of competitor observations for the same product, marketplace and observation date. This is a descriptive screening tool, not a market-share or sales estimator.')
+    example = {'market':'UK','asin':'B000EXAMPLE','observed_at':'2026-11-01','competing_listings':12,
+               'median_competitor_price_eur':24.99,'median_review_count':130,
+               'source':'Operator-recorded authorised research','notes':'Illustrative example only'}
+    download_template('Download competition CSV template', REQUIRED_COMPETITION, 'competition_template.csv', example)
+    uploaded = st.file_uploader('Competition observations CSV', type=['csv'], key='competition_csv')
+    if uploaded is not None:
+        try:
+            observed = pd.read_csv(uploaded)
+            result = assess_competition(observed)
+            result = result[result.market.isin(markets)]
+            if result.empty:
+                st.info('No valid observations for the selected marketplaces.')
+            else:
+                st.dataframe(result, use_container_width=True, hide_index=True)
+                st.download_button('Download competition assessments', result.to_csv(index=False), 'v1_7_competition.csv', 'text/csv')
+                st.caption('Screens indicate relative competition pressure from user-provided data only. They do not measure actual sales, Buy Box share, seller eligibility or total market size.')
+        except (ValueError, KeyError) as exc:
+            st.error(f'Invalid competition data: {exc}')
+    else:
+        st.info('No competition observations uploaded. No competition assessments available.')
