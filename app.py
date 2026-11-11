@@ -3,12 +3,13 @@ import pandas as pd
 from engine import evaluate, REQUIRED
 from pathlib import Path
 from collector import validate
+from audit import inspect_stored, inspect
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.2',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.3',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.2 • Free-data research • UK & Ireland • No orders or purchases')
+st.caption('V1.3 • Free-data research • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 with st.sidebar:
     st.header('Settings')
@@ -19,7 +20,7 @@ with st.sidebar:
 def download_template(label,fields,filename,example):
     st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')
 
-t1,t2,t3,t4,t5=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Method & safeguards'])
+t1,t2,t3,t4,t5,t6=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Method & safeguards'])
 with t1:
     st.subheader('Historical product research')
     st.write('Upload monthly research observations from a source you are permitted to use. The demand_index must be a consistent, documented 0–100 proxy. It is NOT units sold.')
@@ -87,5 +88,19 @@ with t4:
         else: st.info(f'{kind}: no stored feed yet')
     st.caption('Scheduled runs do not manufacture historical observations. An authorised source must supply each dated record.')
 with t5:
-    st.subheader('What V1.2 does and does not do')
+    st.subheader('Data readiness and coverage audit')
+    st.write('This page verifies what is actually stored. It does not retrieve Amazon sales or claim a feed is configured.')
+    overview,details=inspect_stored()
+    st.dataframe(overview,use_container_width=True,hide_index=True)
+    if 'monthly' in details and 'coverage' in details['monthly']:
+        st.write('**12-month coverage by product and marketplace**')
+        coverage=details['monthly']['coverage']
+        st.dataframe(coverage,use_container_width=True,hide_index=True)
+        st.download_button('Download coverage audit',coverage.to_csv(index=False),'coverage_audit.csv','text/csv')
+        st.caption('Complete 12-month coverage means 12 observed months, not verified sales or reliable forecasts.')
+    for kind,info in details.items():
+        if 'error' in info: st.error(f'{kind}: {info["error"]}')
+    st.info('To populate this audit, upload legitimately obtained observations or configure an authorised CSV feed in GitHub Actions. Without a feed, scheduled jobs collect nothing.')
+with t6:
+    st.subheader('What V1.3 does and does not do')
     st.markdown('''- **Free and offline:** accepts user-provided CSV research; no API key or recurring data subscription.\n- **No scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No backfilled history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Storage:** GitHub-committed CSV files persist across Render restarts; uploaded files remain temporary unless separately committed. Do not commit private data to a public repository.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')

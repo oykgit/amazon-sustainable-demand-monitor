@@ -1,28 +1,19 @@
-# Amazon Sustainable Demand Monitor V1.2 — authorised free-feed collection
+# Amazon Sustainable Demand Monitor V1.3 — Free-data audit and CI
 
-Research-only Streamlit dashboard for UK/IE, budget €500–€1,000. Does not purchase anything. **No live Amazon API, no Amazon scraping, and no guarantee of product sales or profit.**
+Research-only dashboard for Amazon UK and Ireland; budget €500–€1,000. **No live Amazon API, no automated Amazon scraping, no verified sales volumes and no purchase execution.**
 
-## What's new
-- Retains V1.1 CSV upload, rank snapshots, search-interest research and product screening.
-- GitHub Actions workflow runs every Monday at 07:15 UTC and can collect CSV observations from **user-authorised public HTTPS endpoints**.
-- Validates incoming data, rejects malformed dates, duplicate observation keys and invalid metrics, and commits merged CSV histories to `data/`.
-- Streamlit reads repository-stored observations when no upload is supplied.
-- No source URL configured means no collection. No history is fabricated.
+## New in V1.3
+- **Data readiness** tab shows whether each stored feed is absent, invalid, stale or current, including latest observation date.
+- Per-product 12-month coverage audit identifies missing months separately for UK and Ireland.
+- Downloadable coverage audit CSV.
+- GitHub Actions CI tests on each commit to `main`, useful for diagnosing a failed code update.
+- Existing V1.2 upload, stored-data, scheduled authorised CSV collection and analysis preserved.
 
-## Install / deploy
-Replace existing repository files one by one in the `main` branch; preserve `.github/workflows/collect.yml`, `tests/` and `data/`. Render can redeploy automatically from `main`. Existing Render settings remain unchanged.
+## Install
+Replace files one by one in GitHub `main` using the ZIP, preserving folder paths. Render Auto-Deploy set to **On Commit** should start after a new commit. This is a fresh commit and can serve as the auto-deploy test. If Render does not deploy, check Render Events and GitHub Actions; CI and deployment are separate.
 
-## Enable scheduled collection (optional)
-In GitHub repository **Settings → Secrets and variables → Actions**, add one or more repository secrets pointing to HTTPS CSV exports you own or are permitted to retrieve:
-- `MONTHLY_RESEARCH_CSV_URL` for `engine.REQUIRED` monthly research fields
-- `RANK_SNAPSHOTS_CSV_URL` for `free_sources.RANK_FIELDS`
-- `SEARCH_INTEREST_CSV_URL` for `free_sources.TREND_FIELDS`
+## What is NOT provided
+There is no preconfigured authorised historical Amazon data source. Weekly GitHub Actions collection only works after you add one or more permitted HTTPS CSV feeds as repository secrets (`MONTHLY_RESEARCH_CSV_URL`, `RANK_SNAPSHOTS_CSV_URL`, `SEARCH_INTEREST_CSV_URL`). A GitHub Actions success with no secrets means a no-op, not successful data collection. Rank and search interest are proxies, not actual Amazon units sold. `verified=true` is only an operator assertion, not independent confirmation. Do not buy inventory based on a preliminary screen alone.
 
-Use **Actions → V1.2 authorised CSV observation collection → Run workflow** for an initial manual test. Weekly runs then append/replace observations by their unique market/product/date key. The bot commits to `main`; branch protection or Actions permissions may prevent writes. The workflow must have **Read and write permissions** for repository contents. GitHub schedules may be delayed or disabled on inactive repositories. Render must redeploy after new commits for the dashboard to show updated data.
-
-Do not put private credentials or customer information in CSV files, especially in public repositories. Do not use an Amazon webpage URL as a CSV feed. Only genuine CSV exports with documented provenance are supported. GitHub Actions runner has outbound network access; feed URLs should be trusted. The collector is intentionally not exposed as an unrestricted public web fetcher.
-
-**Limitations:** There is no guaranteed free 12-month Amazon.ie or Amazon.co.uk sales history. Bestseller ranks are not units sold; search interest is not Amazon purchases. User-supplied `verified=true` is not independent verification. A 12-month claim requires 12 consecutive observed months for a product. No automatic supplier verification. Keepa or another licensed provider may eventually be needed.
-
-Run tests: `python -m unittest discover -s tests -v` (requires `pip install -r requirements.txt`).
-Auto-deploy verification for V1.2
+## Run tests
+`pip install -r requirements.txt` then `python -m unittest discover -s tests -v`.
