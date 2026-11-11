@@ -1,45 +1,70 @@
 import streamlit as st
 import pandas as pd
 from engine import evaluate, REQUIRED
+from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
+                          import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.1',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.0 • UK & Ireland • Research-only • No orders or purchases')
-st.warning('No live Amazon connection in V1.0. Upload your own legitimately obtained market observations. Scores are heuristic, not verified sales forecasts.')
+st.caption('V1.1 • Free-data research • UK & Ireland • No orders or purchases')
+st.warning('No live Amazon API or automatic data collection. Free-data inputs must be obtained lawfully and uploaded by you. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 with st.sidebar:
     st.header('Settings')
     budget=st.slider('Reselling budget (€)',500,1000,750,50)
-    market=st.multiselect('Market', ['UK','IE'],default=['UK','IE'])
-    st.markdown('**Data rules:** 12 monthly observations per product; verified source and costs required for test-purchase status.')
-st.subheader('Import market research')
-st.write('Upload a CSV with one row per product per month. Download the template to see the required fields. `demand_index` is a consistent 0–100 proxy, not actual units sold. `competition_index` is 0–100, higher meaning more competitive. Set `verified=true` only when source and cost data have been checked.')
-template=pd.DataFrame([{k:('UK' if k=='market' else 'B000EXAMPLE' if k=='asin' else 'Example product' if k=='product' else '2026-01' if k=='month' else 'Research provider' if k=='source' else 'false' if k=='verified' else 50 if k in ['demand_index','competition_index'] else 0) for k in REQUIRED}])
-st.download_button('Download CSV template',template.to_csv(index=False),'amazon_monitor_template.csv','text/csv')
-upload=st.file_uploader('Upload observations CSV',type=['csv'])
-if upload is None:
-    st.info('Waiting for historical market observations. No products are recommended until valid data is uploaded.')
-    st.stop()
-try:
-    df=pd.read_csv(upload)
-    results=evaluate(df,budget)
-except Exception as e:
-    st.error(f'Unable to process file: {e}')
-    st.stop()
-if results.empty:
-    st.warning('No usable product observations found.')
-    st.stop()
-results=results[results.market.isin(market)]
-a,b,c=st.columns(3)
-a.metric('Products evaluated',len(results))
-b.metric('Test-purchase candidates',int((results.decision=='TEST PURCHASE CANDIDATE').sum()))
-c.metric('Needs research',int((results.decision=='RESEARCH REQUIRED').sum()))
-st.subheader('Product recommendations')
-st.dataframe(results,use_container_width=True,hide_index=True)
-st.download_button('Export recommendations CSV',results.to_csv(index=False),'recommendations.csv','text/csv')
-selected=st.selectbox('Inspect product',results['asin'].tolist(),format_func=lambda x:results.loc[results.asin==x,'product'].iloc[0])
-g=df[df.asin==selected].copy();g['month']=pd.to_datetime(g['month'],errors='coerce');g=g.sort_values('month')
-if not g.empty:
-    st.subheader('Historical observations')
-    st.line_chart(g.set_index('month')[['demand_index']])
-    st.line_chart(g.set_index('month')[['sale_price']])
-st.caption('Before spending money: verify marketplace seller eligibility, brand restrictions, VAT, import obligations, product safety, landed costs and supplier authenticity. No score guarantees demand or profit.')
+    markets=st.multiselect('Market', ['UK','IE'],default=['UK','IE'])
+    st.caption('All monetary inputs in EUR. UK prices must be converted consistently before upload. A checked box or verified=true is not independent verification.')
+
+def download_template(label,fields,filename,example):
+    st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')
+
+t1,t2,t3,t4=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Method & safeguards'])
+with t1:
+    st.subheader('Historical product research')
+    st.write('Upload monthly research observations from a source you are permitted to use. The demand_index must be a consistent, documented 0–100 proxy. It is NOT units sold.')
+    example={k:('UK' if k=='market' else 'B000EXAMPLE' if k=='asin' else 'Example product' if k=='product' else '2026-01' if k=='month' else 'Documented source URL and methodology' if k=='source' else False if k=='verified' else 50 if k in ['demand_index','competition_index'] else 0) for k in REQUIRED}
+    download_template('Download monthly research CSV template',REQUIRED,'monthly_research_template.csv',example)
+    file=st.file_uploader('Monthly research CSV',type=['csv'],key='monthly')
+    if file:
+        try:
+            df=pd.read_csv(file)
+            result=evaluate(df,budget)
+            if not result.empty:
+                result=result[result.market.isin(markets)]
+                st.metric('Products assessed',len(result))
+                st.dataframe(result,use_container_width=True,hide_index=True)
+                st.download_button('Export assessments',result.to_csv(index=False),'amazon_v1_1_assessments.csv','text/csv')
+                st.caption('TEST PURCHASE CANDIDATE is a heuristic screen, not a verified investment recommendation. Confirm fees, restrictions, VAT, supplier and demand before buying.')
+            else:st.info('No usable observations in this upload.')
+        except Exception as exc:st.error(f'Could not analyse research: {exc}')
+    else:st.info('No research uploaded. No product recommendations available.')
+with t2:
+    st.subheader('Amazon bestseller-rank observations')
+    st.write('Upload manually recorded, dated public category-rank snapshots. Ranks from different categories are not directly comparable. A rank is NOT a sale count. This tab never issues a purchase recommendation.')
+    download_template('Download rank snapshot CSV template',RANK_FIELDS,'rank_snapshot_template.csv',{'market':'UK','asin':'B000EXAMPLE','product':'Example product','observed_at':'2026-11-01','best_seller_rank':250,'category':'Home & Kitchen','source_url':'https://www.amazon.co.uk/'})
+    file=st.file_uploader('Rank snapshots CSV',type=['csv'],key='rank')
+    if file:
+        try:
+            d=import_rank_snapshots(file)
+            summary=rank_summary(d)
+            if not summary.empty:
+                st.dataframe(summary[summary.market.isin(markets)],use_container_width=True,hide_index=True)
+                st.download_button('Export rank research',summary.to_csv(index=False),'rank_research.csv','text/csv')
+            else:st.info('No valid rank observations.')
+        except Exception as exc:st.error(f'Invalid rank file: {exc}')
+with t3:
+    st.subheader('Optional external search-interest research')
+    st.write('Upload monthly 0–100 relative interest observations (for example, from an authorised manual Google Trends export). Search interest is not Amazon demand or actual purchases. UK and Ireland must be researched separately.')
+    download_template('Download search interest CSV template',TREND_FIELDS,'search_interest_template.csv',{'market':'IE','keyword':'drawer organiser','month':'2026-01','search_interest':50,'source':'Manual Google Trends export, Ireland'})
+    file=st.file_uploader('Search-interest CSV',type=['csv'],key='interest')
+    if file:
+        try:
+            d=import_search_interest(file)
+            summary=search_interest_summary(d)
+            if not summary.empty:
+                st.dataframe(summary[summary.market.isin(markets)],use_container_width=True,hide_index=True)
+                st.download_button('Export search interest',summary.to_csv(index=False),'search_interest_research.csv','text/csv')
+            else:st.info('No valid search-interest observations.')
+        except Exception as exc:st.error(f'Invalid interest file: {exc}')
+with t4:
+    st.subheader('What V1.1 does and does not do')
+    st.markdown('''- **Free and offline:** accepts user-provided CSV research; no API key or recurring data subscription.\n- **No scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No automatic history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Temporary uploads:** Render free instances do not provide durable local file storage; download your research and reports.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')

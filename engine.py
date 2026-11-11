@@ -7,6 +7,8 @@ def evaluate(df, budget=1000):
     if missing: raise ValueError('Missing columns: '+', '.join(sorted(missing)))
     d=df.copy()
     d['month']=pd.to_datetime(d['month'], errors='coerce')
+    # Reject future observations; never fabricate a 12-month history.
+    d=d[d['month'].dt.to_period('M') <= pd.Timestamp.today().to_period('M')]
     for c in ['demand_index','sale_price','source_cost','marketplace_fee','shipping','other_cost','competition_index']:
         d[c]=pd.to_numeric(d[c],errors='coerce')
     d['verified']=d['verified'].astype(str).str.lower().isin(['true','1','yes'])
@@ -14,8 +16,9 @@ def evaluate(df, budget=1000):
     for (market,asin),g in d.groupby(['market','asin']):
         g=g.dropna(subset=['month','demand_index','sale_price','source_cost','marketplace_fee','shipping','other_cost','competition_index']).sort_values('month')
         if g.empty:continue
+        g['month']=g['month'].dt.to_period('M').dt.to_timestamp()
         g=g.drop_duplicates('month',keep='last')
-        last=g.iloc[-1]; months=len(g); valid=(months>=12 and (g['month'].max().to_period('M')-g['month'].min().to_period('M')).n>=11)
+        last=g.iloc[-1]; months=len(g); valid=(months>=12 and (g['month'].max().to_period('M')-g['month'].min().to_period('M')).n==months-1)
         mean=g.demand_index.mean(); cv=(g.demand_index.std(ddof=0)/mean) if mean>0 else 999
         consistency=max(0,min(100,100*(1-cv))) if valid else 0
         price=float(last.sale_price); unit_cost=float(last.source_cost+last.marketplace_fee+last.shipping+last.other_cost)

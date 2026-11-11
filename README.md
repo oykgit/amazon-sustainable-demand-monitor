@@ -1,37 +1,38 @@
-# Amazon Sustainable Demand Monitor V1.0
+# Amazon Sustainable Demand Monitor V1.1 — Free Data Edition
 
-A research-only, Streamlit dashboard for evaluating 12-month product demand consistency and resale unit economics in the UK and Ireland. **No live Amazon integration, no order placement, and no guarantee of profit.**
+A research-only Streamlit application for Amazon UK and Ireland. No paid API, scraping, automatic orders or claims of access to actual Amazon sales. It accepts lawful manually collected / exported CSV observations and keeps demand proxies separate from financial screens.
 
-## Quick start
+## Deploy / upgrade
+
+Replace the files one by one in the **main** branch of your GitHub repository: `app.py`, `engine.py`, `free_sources.py` (new), `requirements.txt`, `render.yaml`, `README.md`, `tests/test_engine.py`, and `tests/test_free_sources.py` (new). Preserve the root paths exactly; do **not** upload the enclosing ZIP folder as an extra directory. Render should auto-deploy if enabled; otherwise use its deploy control. Keep the existing Render start command.
+
+## Run locally
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+python -m pytest -q
 ```
 
-## Deploy to GitHub + Render
+## Data sources, legally and practically
 
-1. Create a GitHub repository named `amazon-sustainable-demand-monitor`.
-2. Upload `app.py`, `engine.py`, `requirements.txt`, `render.yaml`, `README.md`, and `tests/` into the repository's **main** branch.
-3. On Render choose **New > Blueprint** and connect the GitHub repository. Confirm the configuration and deploy.
-4. Open the Render URL and upload your market observations CSV.
+1. **Manual Amazon product research:** record publicly displayed product category ranks and source URLs over time, in compliance with Amazon's terms. Do not use prohibited scraping. The application imports CSV snapshots, not webpages.
+2. **Historical research CSV:** use existing data you lawfully collected or can legitimately export, with a documented consistent 0–100 `demand_index`. Do not convert bestseller rank directly into units sold or manufacture backdated records.
+3. **Google Trends or similar:** manually export relative search interest for a selected keyword and geography where permitted, then map into the provided CSV template. Relative interest is NOT Amazon sales.
+4. **Supplier and cost research:** manually enter authentic offers and fees in the historical research CSV. `verified=true` is **self-attestation**, not a programmatic verification.
 
-## Data fields
+V1.1 does not promise a free historical Amazon API: Amazon's public pages do not supply a complete, dependable, downloadable year of per-product unit sales. There is no automatic free data feed in this release. Ireland coverage is particularly limited. Amazon UK signals must not be treated as Ireland sales.
 
-`market` (UK/IE), `asin`, `product`, `month` (YYYY-MM), `demand_index` (0-100 proxy), `sale_price`, `source_cost`, `marketplace_fee`, `shipping`, `other_cost`, `competition_index` (0-100), `source` (data provenance), `verified` (true/false).
+## File formats
 
-All monetary columns should be in **EUR**, including UK prices converted at a documented exchange rate. Prices must be VAT-consistent; do not mix VAT-inclusive and VAT-exclusive cost figures. Each row is one monthly observation for one ASIN and marketplace. Use legitimate licensed data or manual research; never assume access to Amazon actual sales units. This V1 does not independently verify the `verified` field: it is an operator attestation.
+Use the download-template buttons in each dashboard tab. Monthly research CSV requires `market,asin,product,month,demand_index,sale_price,source_cost,marketplace_fee,shipping,other_cost,competition_index,source,verified`. All money in **EUR** (convert UK prices with documented FX), and keep VAT treatment consistent. Each row = one product, marketplace and month.
 
-## Limitations
+Rank snapshot CSV: `market,asin,product,observed_at,best_seller_rank,category,source_url`. Search interest CSV: `market,keyword,month,search_interest,source`. A product category rank cannot be compared to another category or converted to units sold without a validated model.
 
-- Demand index is a proxy; scores are heuristics, not calibrated probabilities.
-- `verified=true` is supplied by the operator and is not independently validated.
-- A minimum of 12 unique monthly observations is required for a candidate decision; missing months are not imputed.
-- The score uses historical consistency, margins, competition, price stability and source verification.
-- No independent supplier verification, seller restriction checks, live fee calculation, live FX, VAT computation, or import compliance automation yet.
-- The sample template is not real product evidence. No purchases are made.
-- V1 uses in-memory uploads and has no persistent data store or scheduled collection.
+## Limitations / next step
 
-## Roadmap
-
-V1.1: licensed market data integration and provenance checks; V1.2: timestamped persistent history and proper month-contiguity validation; V1.3: landed cost/VAT and marketplace fee connectors; V1.4: prospective paper recommendation journal and outcome validation.
+- Uploads are in-memory, not persisted. Back up source CSVs and exported reports. No scheduler or live API.
+- Existing V1.0 financial heuristic remains; a `TEST PURCHASE CANDIDATE` flag is not a guarantee or independent validation of demand, suppliers, or costs.
+- No price/stock/seller-eligibility checking, actual sales, or Irish historical Amazon API.
+- A full year of *contiguous* monthly observations is needed for a 12-month historical screen. V1.1 improves this validation and rejects future months.
+- Next version: optional paid licensed data source only with user approval, audit trail, forward tracking, validated fees and separate UK/IE eligibility.
