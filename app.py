@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
+from profitability import calculate, screen
 from pathlib import Path
 from collector import validate
 from audit import inspect_stored, inspect
@@ -9,9 +10,9 @@ from product_catalogue import lookup_barcode
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.5',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.6',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.5 • 12-month demand intelligence • UK & Ireland • No orders or purchases')
+st.caption('V1.6 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 with st.sidebar:
     st.header('Settings')
@@ -22,7 +23,7 @@ with st.sidebar:
 def download_template(label,fields,filename,example):
     st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')
 
-t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Product catalogue','Demand intelligence','Method & safeguards'])
+t1,t2,t3,t4,t5,t6,t7,t8,t9=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Product catalogue','Demand intelligence','Profitability scenarios','Method & safeguards'])
 with t1:
     st.subheader('Historical product research')
     st.write('Upload monthly research observations from a source you are permitted to use. The demand_index must be a consistent, documented 0–100 proxy. It is NOT units sold.')
@@ -137,6 +138,45 @@ with t7:
             else: st.info('No valid observations in the current 12-month window.')
         except Exception as exc: st.error(f'Could not analyse demand history: {exc}')
     else: st.info('Upload real observations or configure an authorised feed. No historical observations have been fabricated.')
-with t8:
-    st.subheader('What V1.5 does and does not do')
+with t9:
+    st.subheader('What V1.6 does and does not do')
     st.markdown('''- **Free research:** accepts user-provided CSV research and optionally queries Open Food Facts for live barcode metadata; no paid API key.\n- **No Amazon scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No backfilled history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Storage:** GitHub-committed CSV files persist across Render restarts; uploaded files remain temporary unless separately committed. Do not commit private data to a public repository.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')
+
+with t8:
+    st.subheader('V1.6 product profitability scenarios')
+    st.warning('Research-only calculator. All fees, VAT treatment and costs are operator-entered assumptions, not live Amazon quotes. Do not treat a passing result as permission or advice to buy.')
+    market=st.selectbox('Marketplace scenario', ['Amazon UK', 'Amazon Ireland'])
+    st.caption('All figures must be in EUR. For UK GBP figures, convert externally using a documented exchange rate and account for currency conversion charges. Fees and tax treatment differ by seller, product, fulfilment and country.')
+    left,right=st.columns(2)
+    with left:
+        price=st.number_input('Selling price (€)',min_value=0.01,value=24.99,step=0.50)
+        cost=st.number_input('Unit purchase cost, VAT-inclusive if claiming input VAT (€)',min_value=0.0,value=9.00,step=0.50)
+        referral=st.number_input('Referral fee assumption (%)',min_value=0.0,max_value=100.0,value=15.0,step=0.5)
+        fulfil=st.number_input('Fulfilment or delivery fee per unit (€)',min_value=0.0,value=3.50,step=0.25)
+        inbound=st.number_input('Inbound shipping per unit (€)',min_value=0.0,value=0.75,step=0.25)
+        packaging=st.number_input('Packaging per unit (€)',min_value=0.0,value=0.25,step=0.25)
+    with right:
+        other=st.number_input('Other unit costs (€)',min_value=0.0,value=0.50,step=0.25)
+        returns=st.number_input('Returns/refunds reserve (% of selling price)',min_value=0.0,max_value=100.0,value=3.0,step=0.5)
+        vat_rate=st.number_input('Scenario VAT rate (%) — enter applicable rate',min_value=0.0,max_value=100.0,value=0.0,step=0.5)
+        vat_included=st.checkbox('Selling price includes VAT that seller must remit',value=False)
+        vat_recoverable=st.checkbox('Purchase cost includes recoverable input VAT at scenario rate',value=False)
+        referral_gross=st.checkbox('Apply referral rate to VAT-inclusive selling price',value=True)
+        min_profit=st.number_input('Minimum net profit per unit (€)',min_value=0.0,value=4.0,step=0.5)
+        min_roi=st.number_input('Minimum ROI on purchase cost (%)',min_value=0.0,value=25.0,step=5.0)
+    try:
+        r=calculate(price=price,unit_cost=cost,referral_pct=referral,fulfilment_fee=fulfil,
+                    inbound_shipping=inbound,packaging=packaging,other_cost=other,
+                    return_reserve_pct=returns,vat_rate_pct=vat_rate,vat_included=vat_included,
+                    vat_recoverable=vat_recoverable,referral_on_gross=referral_gross)
+        a,b,c=st.columns(3)
+        a.metric('Scenario net profit per unit',f"€{r['net_profit_eur']:.2f}")
+        b.metric('Scenario ROI', 'N/A' if r['roi_on_purchase_cost_pct'] is None else f"{r['roi_on_purchase_cost_pct']:.2f}%")
+        c.metric('Scenario break-even price','Not attainable' if r['break_even_price_eur'] is None else f"€{r['break_even_price_eur']:.2f}")
+        st.write('**Scenario screening:**',screen(r,min_profit,min_roi))
+        st.dataframe(pd.DataFrame([{'component':k,'value':v} for k,v in r.items()]),hide_index=True,use_container_width=True)
+        export={'marketplace_scenario':market,**r,'threshold_status':screen(r,min_profit,min_roi)}
+        st.download_button('Download profitability scenario CSV',pd.DataFrame([export]).to_csv(index=False),'v1_6_profitability_scenario.csv','text/csv')
+        st.caption('Not modelled: seller plan subscription, storage, long-term storage, advertising, returns processing, category-specific fee rules, duties, tax obligations, FX spreads, and cash-flow timing unless included in Other costs. VAT calculation is simplified and may not reflect your legal treatment. Verify Amazon fees and tax with official sources before any transaction.')
+    except ValueError as exc:
+        st.error(str(exc))

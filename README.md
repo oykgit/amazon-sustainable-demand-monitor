@@ -31,3 +31,8 @@ Open Food Facts community data is subject to its terms and Open Database License
 
 ## V1.5: 12-month demand intelligence
 The **Demand intelligence** tab analyses user-provided, sourced monthly 0–100 demand proxies, showing coverage, missing months, stability, recent changes and possible spikes. It never fabricates history. A single 12-month window cannot prove annual seasonality. These indicators are not actual Amazon unit sales or validated purchase recommendations. No paid subscription or automated purchasing is required.
+
+
+## V1.6: Profitability scenario calculator
+
+The **Profitability scenarios** tab accepts user-entered EUR prices and costs, percentage referral fee, fulfilment, inbound shipping, packaging, other costs, returns reserve, and simplified VAT assumptions. It displays net profit, ROI on purchase cost, margin, break-even price, a threshold screen and CSV export. No live Amazon fee or tax API is connected; defaults are **illustrative assumptions, not current official rates**. VAT recoverability must be legally established and this model only adjusts the purchase cost, not other input VAT. UK inputs must be converted to EUR consistently. No automatic purchases or verified buy recommendations.
