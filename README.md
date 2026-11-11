@@ -49,3 +49,7 @@ All V1.6 workspaces are accessible through a **left sidebar** instead of crowded
 - Each successful lookup can be exported with a UTC timestamp and source URL as `catalogue_observations.csv`. Previous exports can be uploaded and merged with de-duplication.
 - **Persistence warning:** Render session state and local runtime files are ephemeral. Download the CSV and commit it to `data/catalogue_observations.csv` in GitHub to retain it across deployments. The app does not automatically write to GitHub.
 - Future Keepa integration is planned but **not** connected. No automatic Amazon scraping, purchasing or buying recommendations.
+
+## V1.8.1 API connection diagnostics
+
+The Free data integration page now has a **Run connection diagnostics (both providers)** button. It tests the actual barcode lookup route from the deployed server and displays each provider's HTTP status, rate-limit Retry-After where provided, and a safe explanation. Both integrations use the same bounded JSON request handler and an application-identifying User-Agent. HTTP 403 may remain if providers block Render's egress IPs or cloud-hosted traffic; this update does not claim to bypass those restrictions. No paid API, automatic retry, scraping, or purchase functionality is introduced.

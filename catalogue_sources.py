@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from product_catalogue import lookup_barcode
+from api_diagnostics import request_json
 
 UPC_URL = 'https://api.upcitemdb.com/prod/trial/lookup'
 MAX_BYTES = 500_000
@@ -19,13 +20,9 @@ def validate_barcode(barcode):
 def lookup_upcitemdb(barcode, opener=urlopen):
     barcode = validate_barcode(barcode)
     req = Request(UPC_URL + '?' + urlencode({'upc': barcode}), headers={
-        'User-Agent':'AmazonSustainableDemandMonitor/1.8 (research-only; github.com/oykgit/amazon-sustainable-demand-monitor)',
+        'User-Agent':'AmazonSustainableDemandMonitor/1.8.1 (research-only; https://github.com/oykgit/amazon-sustainable-demand-monitor)',
         'Accept':'application/json'})
-    with opener(req, timeout=12) as response:
-        raw = response.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES:
-        raise ValueError('UPCitemdb response exceeds size limit.')
-    data = json.loads(raw)
+    data = request_json(req, 'UPCitemdb', opener=opener, max_bytes=MAX_BYTES)
     if not isinstance(data, dict):
         raise ValueError('Invalid catalogue response.')
     items = data.get('items', [])
