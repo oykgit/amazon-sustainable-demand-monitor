@@ -53,3 +53,11 @@ All V1.6 workspaces are accessible through a **left sidebar** instead of crowded
 ## V1.8.1 API connection diagnostics
 
 The Free data integration page now has a **Run connection diagnostics (both providers)** button. It tests the actual barcode lookup route from the deployed server and displays each provider's HTTP status, rate-limit Retry-After where provided, and a safe explanation. Both integrations use the same bounded JSON request handler and an application-identifying User-Agent. HTTP 403 may remain if providers block Render's egress IPs or cloud-hosted traffic; this update does not claim to bypass those restrictions. No paid API, automatic retry, scraping, or purchase functionality is introduced.
+
+## V1.8.2: API reliability safeguards
+
+- Adds `provider_guard.py` for a **per-Streamlit-session** product lookup cache (6-hour TTL, 100-entry limit) and provider-specific cooldowns.
+- On HTTP 429, honours a parseable `Retry-After` response (capped at 24 hours); otherwise pauses that provider for one hour. On HTTP 403, pauses that provider for 24 hours by default. No automatic retries or proxy workarounds.
+- Connection diagnostics respect active session cooldowns. A compact request-event log and provider status indicators are available on the Free data integration page.
+- Cached product identity records are **not** Amazon price/sales data. A cached record can be reused while its provider is unavailable; it is marked as cached.
+- **Limitations:** Cache, cooldowns, and events are session-local, not shared across users or server processes, and disappear on restart. They are not a global quota enforcer. Download/commit observation CSVs for longer-term retention. No external API availability or 403 resolution is guaranteed.

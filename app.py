@@ -8,14 +8,15 @@ from pathlib import Path
 from collector import validate
 from audit import inspect_stored, inspect
 from product_catalogue import lookup_barcode
-from catalogue_sources import lookup_product, observation, merge_observations, FIELDS
+from catalogue_sources import lookup_product, observation, merge_observations, FIELDS, validate_barcode
 from api_diagnostics import check_provider, CatalogueConnectionError
+from provider_guard import ProviderGuard
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.1',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.2',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.8.1 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.8.2 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -155,13 +156,31 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.8.1 connection diagnostics: an HTTP 403 may be a provider-side restriction on Render. No automatic retries or proxy workarounds.')
-    if st.button('Run connection diagnostics (both providers)', key='v181_diagnostics'):
+    st.caption('V1.8.2: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
+    if 'provider_guard' not in st.session_state:
+        st.session_state.provider_guard = ProviderGuard()
+    guard = st.session_state.provider_guard
+    for provider_name in ['Open Food Facts', 'UPCitemdb']:
+        remaining = guard.remaining(provider_name)
+        st.caption(f'{provider_name}: ' + (f'cooldown active ({remaining} seconds remaining)' if remaining else 'no local cooldown'))
+    if st.button('Run connection diagnostics (both providers)', key='v182_diagnostics'):
         for provider in ['Open Food Facts', 'UPCitemdb']:
+            if guard.remaining(provider):
+                st.warning(f'{provider}: diagnostics skipped during cooldown; no request sent.')
+                continue
             diagnostic = check_provider(provider)
             st.write(diagnostic['provider'], diagnostic)
             if not diagnostic['reachable']:
-                st.warning('If HTTP 403 persists, the provider may restrict cloud-hosted traffic. Browser access alone does not establish Render access.')
+                if diagnostic.get('http_status') in (403, 429):
+                    error = CatalogueConnectionError(provider, diagnostic['http_status'],
+                                                     diagnostic['message'], diagnostic.get('retry_after'))
+                    guard.record_error(provider, error)
+                st.warning('Provider denied or could not complete the request. Browser access does not guarantee server access.')
+            else:
+                guard._log(provider, 'diagnostic_success', 200)
+    if guard.events:
+        with st.expander('Recent API request events (this session only)'):
+            st.dataframe(pd.DataFrame(guard.events[-30:]), hide_index=True)
     st.info('Live barcode identity lookups are available on demand. Neither provider supplies Amazon prices, sales, rankings or resale eligibility. No paid credentials required.')
     st.write('**Sources:** [UPCitemdb](https://www.upcitemdb.com/api) (general retail catalogue, public trial endpoint) and [Open Food Facts](https://world.openfoodfacts.org/) (primarily foods). Provider rate limits, coverage and terms apply. UPCitemdb free usage can change.')
     source=st.selectbox('Catalogue provider', ['UPCitemdb','Open Food Facts'])
@@ -170,10 +189,10 @@ if page == 'Free data integration':
         st.session_state.catalogue_observations=[]
     if st.button('Fetch live product metadata',type='primary'):
         try:
-            result=lookup_product(code,source)
+            result, result_origin=guard.fetch(source, validate_barcode(code), lookup_product)
             if result['found']:
                 st.session_state.catalogue_observations.append(observation(result))
-                st.success('Product metadata found and added to this session’s export list.')
+                st.success(f'Product metadata found ({result_origin}) and added to this session’s export list.')
             else:
                 st.info('No exact matching barcode record was returned.')
             st.session_state.last_catalogue_result=result
