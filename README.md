@@ -1,20 +1,30 @@
-# Amazon Sustainable Demand Monitor V1.3 — Free-data audit and CI
+# Amazon Sustainable Demand Monitor V1.4 — Free data integration
 
-Research-only dashboard for Amazon UK and Ireland; budget €500–€1,000. **No live Amazon API, no automated Amazon scraping, no verified sales volumes and no purchase execution.**
+Research-only UK and Ireland dashboard. No orders, purchases or live Amazon sales claims.
 
-## New in V1.3
-- **Data readiness** tab shows whether each stored feed is absent, invalid, stale or current, including latest observation date.
-- Per-product 12-month coverage audit identifies missing months separately for UK and Ireland.
-- Downloadable coverage audit CSV.
-- GitHub Actions CI tests on each commit to `main`, useful for diagnosing a failed code update.
-- Existing V1.2 upload, stored-data, scheduled authorised CSV collection and analysis preserved.
+## New in V1.4
 
-## Install
-Replace files one by one in GitHub `main` using the ZIP, preserving folder paths. Render Auto-Deploy set to **On Commit** should start after a new commit. This is a fresh commit and can serve as the auto-deploy test. If Render does not deploy, check Render Events and GitHub Actions; CI and deployment are separate.
+- Optional **live product identification** by barcode using the public [Open Food Facts](https://world.openfoodfacts.org/) API (primarily packaged food products). No subscription or API key.
+- Displays provenance and clear limitations: **Open Food Facts does not provide Amazon UK/IE sales, 12-month demand, Amazon prices, seller eligibility or sourcing costs**.
+- Existing operator-authorised HTTPS CSV collector, monthly observations, historical readiness audit, and GitHub Actions remain available.
+- Tests for safe barcode input, real metadata mapping and missing products.
 
-## What is NOT provided
-There is no preconfigured authorised historical Amazon data source. Weekly GitHub Actions collection only works after you add one or more permitted HTTPS CSV feeds as repository secrets (`MONTHLY_RESEARCH_CSV_URL`, `RANK_SNAPSHOTS_CSV_URL`, `SEARCH_INTEREST_CSV_URL`). A GitHub Actions success with no secrets means a no-op, not successful data collection. Rank and search interest are proxies, not actual Amazon units sold. `verified=true` is only an operator assertion, not independent confirmation. Do not buy inventory based on a preliminary screen alone.
+## What V1.4 cannot yet do
 
-## Run tests
-`pip install -r requirements.txt` then `python -m unittest discover -s tests -v`.
-V1.3 automatic deployment connection test
+No freely available verified 12-month Amazon UK/IE sales history has been connected. The existing authorised CSV ingestion requires a feed supplied by the operator. Do not use catalogue identity, Amazon rank snapshots or external search-interest proxies as proof of Amazon sales. There are no evidence-backed buy recommendations until historical demand, supplier cost and seller eligibility are independently established.
+
+## Deploy
+
+Replace the files in `main` with the contents of this ZIP, keeping the `.github/workflows/` and `tests/` directories. Render Auto-Deploy should build the new commit. Do not add secrets or API keys to public GitHub files.
+
+## Run locally
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+pytest -q
+```
+
+## Source and licensing
+
+Open Food Facts community data is subject to its terms and Open Database License; attribution and share-alike may apply to redistributed databases. This app makes a one-product lookup on direct user request; it does not scrape Amazon or create a bulk Open Food Facts database.
