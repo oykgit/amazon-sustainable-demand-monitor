@@ -1,38 +1,27 @@
-# Amazon Sustainable Demand Monitor V1.1 — Free Data Edition
+# Amazon Sustainable Demand Monitor V1.2 — authorised free-feed collection
 
-A research-only Streamlit application for Amazon UK and Ireland. No paid API, scraping, automatic orders or claims of access to actual Amazon sales. It accepts lawful manually collected / exported CSV observations and keeps demand proxies separate from financial screens.
+Research-only Streamlit dashboard for UK/IE, budget €500–€1,000. Does not purchase anything. **No live Amazon API, no Amazon scraping, and no guarantee of product sales or profit.**
 
-## Deploy / upgrade
+## What's new
+- Retains V1.1 CSV upload, rank snapshots, search-interest research and product screening.
+- GitHub Actions workflow runs every Monday at 07:15 UTC and can collect CSV observations from **user-authorised public HTTPS endpoints**.
+- Validates incoming data, rejects malformed dates, duplicate observation keys and invalid metrics, and commits merged CSV histories to `data/`.
+- Streamlit reads repository-stored observations when no upload is supplied.
+- No source URL configured means no collection. No history is fabricated.
 
-Replace the files one by one in the **main** branch of your GitHub repository: `app.py`, `engine.py`, `free_sources.py` (new), `requirements.txt`, `render.yaml`, `README.md`, `tests/test_engine.py`, and `tests/test_free_sources.py` (new). Preserve the root paths exactly; do **not** upload the enclosing ZIP folder as an extra directory. Render should auto-deploy if enabled; otherwise use its deploy control. Keep the existing Render start command.
+## Install / deploy
+Replace existing repository files one by one in the `main` branch; preserve `.github/workflows/collect.yml`, `tests/` and `data/`. Render can redeploy automatically from `main`. Existing Render settings remain unchanged.
 
-## Run locally
+## Enable scheduled collection (optional)
+In GitHub repository **Settings → Secrets and variables → Actions**, add one or more repository secrets pointing to HTTPS CSV exports you own or are permitted to retrieve:
+- `MONTHLY_RESEARCH_CSV_URL` for `engine.REQUIRED` monthly research fields
+- `RANK_SNAPSHOTS_CSV_URL` for `free_sources.RANK_FIELDS`
+- `SEARCH_INTEREST_CSV_URL` for `free_sources.TREND_FIELDS`
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-python -m pytest -q
-```
+Use **Actions → V1.2 authorised CSV observation collection → Run workflow** for an initial manual test. Weekly runs then append/replace observations by their unique market/product/date key. The bot commits to `main`; branch protection or Actions permissions may prevent writes. The workflow must have **Read and write permissions** for repository contents. GitHub schedules may be delayed or disabled on inactive repositories. Render must redeploy after new commits for the dashboard to show updated data.
 
-## Data sources, legally and practically
+Do not put private credentials or customer information in CSV files, especially in public repositories. Do not use an Amazon webpage URL as a CSV feed. Only genuine CSV exports with documented provenance are supported. GitHub Actions runner has outbound network access; feed URLs should be trusted. The collector is intentionally not exposed as an unrestricted public web fetcher.
 
-1. **Manual Amazon product research:** record publicly displayed product category ranks and source URLs over time, in compliance with Amazon's terms. Do not use prohibited scraping. The application imports CSV snapshots, not webpages.
-2. **Historical research CSV:** use existing data you lawfully collected or can legitimately export, with a documented consistent 0–100 `demand_index`. Do not convert bestseller rank directly into units sold or manufacture backdated records.
-3. **Google Trends or similar:** manually export relative search interest for a selected keyword and geography where permitted, then map into the provided CSV template. Relative interest is NOT Amazon sales.
-4. **Supplier and cost research:** manually enter authentic offers and fees in the historical research CSV. `verified=true` is **self-attestation**, not a programmatic verification.
+**Limitations:** There is no guaranteed free 12-month Amazon.ie or Amazon.co.uk sales history. Bestseller ranks are not units sold; search interest is not Amazon purchases. User-supplied `verified=true` is not independent verification. A 12-month claim requires 12 consecutive observed months for a product. No automatic supplier verification. Keepa or another licensed provider may eventually be needed.
 
-V1.1 does not promise a free historical Amazon API: Amazon's public pages do not supply a complete, dependable, downloadable year of per-product unit sales. There is no automatic free data feed in this release. Ireland coverage is particularly limited. Amazon UK signals must not be treated as Ireland sales.
-
-## File formats
-
-Use the download-template buttons in each dashboard tab. Monthly research CSV requires `market,asin,product,month,demand_index,sale_price,source_cost,marketplace_fee,shipping,other_cost,competition_index,source,verified`. All money in **EUR** (convert UK prices with documented FX), and keep VAT treatment consistent. Each row = one product, marketplace and month.
-
-Rank snapshot CSV: `market,asin,product,observed_at,best_seller_rank,category,source_url`. Search interest CSV: `market,keyword,month,search_interest,source`. A product category rank cannot be compared to another category or converted to units sold without a validated model.
-
-## Limitations / next step
-
-- Uploads are in-memory, not persisted. Back up source CSVs and exported reports. No scheduler or live API.
-- Existing V1.0 financial heuristic remains; a `TEST PURCHASE CANDIDATE` flag is not a guarantee or independent validation of demand, suppliers, or costs.
-- No price/stock/seller-eligibility checking, actual sales, or Irish historical Amazon API.
-- A full year of *contiguous* monthly observations is needed for a 12-month historical screen. V1.1 improves this validation and rejects future months.
-- Next version: optional paid licensed data source only with user approval, audit trail, forward tracking, validated fees and separate UK/IE eligibility.
+Run tests: `python -m unittest discover -s tests -v` (requires `pip install -r requirements.txt`).
