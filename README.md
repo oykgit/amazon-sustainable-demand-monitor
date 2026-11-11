@@ -17,3 +17,4 @@ There is no preconfigured authorised historical Amazon data source. Weekly GitHu
 
 ## Run tests
 `pip install -r requirements.txt` then `python -m unittest discover -s tests -v`.
+V1.3 automatic deployment connection test
