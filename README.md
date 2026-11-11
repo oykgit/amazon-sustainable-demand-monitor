@@ -25,3 +25,4 @@ Do not put private credentials or customer information in CSV files, especially 
 **Limitations:** There is no guaranteed free 12-month Amazon.ie or Amazon.co.uk sales history. Bestseller ranks are not units sold; search interest is not Amazon purchases. User-supplied `verified=true` is not independent verification. A 12-month claim requires 12 consecutive observed months for a product. No automatic supplier verification. Keepa or another licensed provider may eventually be needed.
 
 Run tests: `python -m unittest discover -s tests -v` (requires `pip install -r requirements.txt`).
+Auto-deploy verification for V1.2
