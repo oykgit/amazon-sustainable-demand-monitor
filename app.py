@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from engine import evaluate, REQUIRED
+from demand_history import analyse_history
 from pathlib import Path
 from collector import validate
 from audit import inspect_stored, inspect
@@ -8,9 +9,9 @@ from product_catalogue import lookup_barcode
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.4',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.5',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.4 • Free-data research • UK & Ireland • No orders or purchases')
+st.caption('V1.5 • 12-month demand intelligence • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 with st.sidebar:
     st.header('Settings')
@@ -21,7 +22,7 @@ with st.sidebar:
 def download_template(label,fields,filename,example):
     st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')
 
-t1,t2,t3,t4,t5,t6,t7=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Product catalogue','Method & safeguards'])
+t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(['12-month research','Amazon rank snapshots','External search interest','Stored observations','Data readiness','Product catalogue','Demand intelligence','Method & safeguards'])
 with t1:
     st.subheader('Historical product research')
     st.write('Upload monthly research observations from a source you are permitted to use. The demand_index must be a consistent, documented 0–100 proxy. It is NOT units sold.')
@@ -120,5 +121,22 @@ with t6:
         except Exception as exc:st.error(f'Catalogue lookup unavailable: {exc}')
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 with t7:
-    st.subheader('What V1.4 does and does not do')
+    st.subheader('12-month demand intelligence (observed proxy data)')
+    st.write('Measures completeness, variation and possible spikes in a documented 0–100 demand proxy. It cannot establish actual sales, annual seasonality or future demand.')
+    history_file = st.file_uploader('Upload monthly research CSV for demand analysis', type=['csv'], key='demand_history')
+    history_path = Path('data/monthly.csv')
+    if history_file is not None or history_path.exists():
+        try:
+            observations = pd.read_csv(history_file if history_file is not None else history_path)
+            analysed = analyse_history(observations)
+            if not analysed.empty:
+                analysed = analysed[analysed.market.isin(markets)]
+                st.dataframe(analysed, use_container_width=True, hide_index=True)
+                st.download_button('Download demand intelligence CSV', analysed.to_csv(index=False), 'v1_5_demand_intelligence.csv', 'text/csv')
+                st.warning('All scores are descriptive proxy measures, not verified Amazon demand, unit sales or buying recommendations. One year cannot prove recurring annual seasonality.')
+            else: st.info('No valid observations in the current 12-month window.')
+        except Exception as exc: st.error(f'Could not analyse demand history: {exc}')
+    else: st.info('Upload real observations or configure an authorised feed. No historical observations have been fabricated.')
+with t8:
+    st.subheader('What V1.5 does and does not do')
     st.markdown('''- **Free research:** accepts user-provided CSV research and optionally queries Open Food Facts for live barcode metadata; no paid API key.\n- **No Amazon scraping:** does not fetch Amazon pages, bypass access controls, or claim unauthorised API access.\n- **No backfilled history:** if you start recording ranks today, it takes 12 months to accumulate 12 months of genuine monthly observations unless you already have lawful historical data.\n- **No actual unit sales:** Amazon bestseller rank and search-interest indices are proxies.\n- **No automatic market mapping:** Amazon UK and Ireland are separate markets.\n- **No live supplier verification:** `verified=true` is an operator assertion; verify independently.\n- **No purchases:** recommendations are research screens only.\n- **Storage:** GitHub-committed CSV files persist across Render restarts; uploaded files remain temporary unless separately committed. Do not commit private data to a public repository.\n- **Costs:** all monetary data in EUR; consider FX, VAT, marketplace fees, returns, import duties and compliance before investing.''')

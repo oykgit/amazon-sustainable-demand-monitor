@@ -28,3 +28,6 @@ pytest -q
 ## Source and licensing
 
 Open Food Facts community data is subject to its terms and Open Database License; attribution and share-alike may apply to redistributed databases. This app makes a one-product lookup on direct user request; it does not scrape Amazon or create a bulk Open Food Facts database.
+
+## V1.5: 12-month demand intelligence
+The **Demand intelligence** tab analyses user-provided, sourced monthly 0–100 demand proxies, showing coverage, missing months, stability, recent changes and possible spikes. It never fabricates history. A single 12-month window cannot prove annual seasonality. These indicators are not actual Amazon unit sales or validated purchase recommendations. No paid subscription or automated purchasing is required.
