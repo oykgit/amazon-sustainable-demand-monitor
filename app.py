@@ -12,12 +12,13 @@ from catalogue_sources import lookup_product, observation, merge_observations, F
 from api_diagnostics import check_provider, CatalogueConnectionError
 from provider_guard import ProviderGuard
 from persistent_store import configured as database_configured, save_observations, load_observations
+from database_verification import verify_database, is_test_record
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.3',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.4',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.8.3 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.8.4 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -157,7 +158,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.8.3: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
+    st.caption('V1.8.4: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -213,15 +214,24 @@ if page == 'Free data integration':
     st.write('**Exportable dated catalogue observations**')
     if database_configured():
         st.success('Persistent PostgreSQL storage configured (DATABASE_URL).')
+        st.write('**Database verification (synthetic record only)**')
+        st.caption('Creates one fixed, clearly labelled SYSTEM_TEST_ONLY record in PostgreSQL. It is never Amazon product evidence. Repeating the test checks duplicate protection.')
+        if st.button('Run database verification', key='v184_verify'):
+            try:
+                report = verify_database()
+                st.success('Database verified: write, read and duplicate protection succeeded.')
+                st.json(report)
+            except Exception as exc:
+                st.error(f'Database verification failed ({type(exc).__name__}). Check Render logs; do not share DATABASE_URL.')
         if st.button('Save session observations to database', key='v183_save'):
             try:
-                inserted = save_observations(st.session_state.catalogue_observations)
+                inserted = save_observations([r for r in st.session_state.catalogue_observations if not is_test_record(r)])
                 st.success(f'{inserted} new observations saved; duplicates ignored.')
             except Exception as exc:
                 st.error(f'Database save failed ({type(exc).__name__}). Check Render database configuration and logs.')
         if st.button('Load saved observations from database', key='v183_load'):
             try:
-                st.session_state.catalogue_observations = load_observations()
+                st.session_state.catalogue_observations = [r for r in load_observations() if not is_test_record(r)]
                 st.success(f'Loaded {len(st.session_state.catalogue_observations)} observations (maximum 10,000).')
             except Exception as exc:
                 st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
@@ -234,7 +244,8 @@ if page == 'Free data integration':
             raise ValueError('Uploaded file does not match the V1.8 catalogue observation format.')
         merged=base[FIELDS].copy()
         for record in st.session_state.catalogue_observations:
-            merged=merge_observations(merged,record)
+            if not is_test_record(record):
+                merged=merge_observations(merged,record)
         st.metric('Exportable catalogue observations',len(merged))
         if not merged.empty:
             st.dataframe(merged,use_container_width=True,hide_index=True)
