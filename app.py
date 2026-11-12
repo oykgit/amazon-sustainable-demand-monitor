@@ -13,12 +13,13 @@ from api_diagnostics import check_provider, CatalogueConnectionError
 from provider_guard import ProviderGuard
 from persistent_store import configured as database_configured, save_observations, load_observations
 from database_verification import verify_database, is_test_record
+from research_history import manual_observation, timeline
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.4',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.9',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.8.4 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.9 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -158,7 +159,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.8.4: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
+    st.caption('V1.9: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -193,8 +194,16 @@ if page == 'Free data integration':
         try:
             result, result_origin=guard.fetch(source, validate_barcode(code), lookup_product)
             if result['found']:
-                st.session_state.catalogue_observations.append(observation(result))
-                st.success(f'Product metadata found ({result_origin}) and added to this session’s export list.')
+                record = observation(result)
+                st.session_state.catalogue_observations.append(record)
+                if database_configured() and st.session_state.get('v19_auto_save', False):
+                    try:
+                        count = save_observations([record])
+                        st.success(f'Product metadata found ({result_origin}); {count} new record saved to Neon.')
+                    except Exception as exc:
+                        st.warning(f'Found metadata, but database save failed ({type(exc).__name__}); retained in this session.')
+                else:
+                    st.success(f'Product metadata found ({result_origin}) and added to this session’s export list.')
             else:
                 st.info('No exact matching barcode record was returned.')
             st.session_state.last_catalogue_result=result
@@ -211,9 +220,34 @@ if page == 'Free data integration':
                                      'brand':result.get('brand','')})
         st.markdown(f"[Open provider record]({result['source_url']})")
     st.divider()
+    st.subheader('V1.9: Record a documented product identity')
+    st.caption('Enter a product you observed from its packaging or a permitted source. This does not assert Amazon availability, price, demand or resale eligibility.')
+    with st.form('v19_manual_form'):
+        manual_code = st.text_input('Barcode (8–14 digits)', key='v19_manual_barcode')
+        manual_name = st.text_input('Product name', key='v19_manual_name')
+        manual_brand = st.text_input('Brand (optional)', key='v19_manual_brand')
+        manual_quantity = st.text_input('Pack size (optional)', key='v19_manual_quantity')
+        manual_url = st.text_input('Source URL (optional)', key='v19_manual_url')
+        manual_submit = st.form_submit_button('Record product identity')
+    if manual_submit:
+        try:
+            record = manual_observation(manual_code, manual_name, manual_brand, manual_quantity, manual_url)
+            st.session_state.catalogue_observations.append(record)
+            if database_configured():
+                try:
+                    count = save_observations([record])
+                    st.success(f'Recorded in Neon: {count} new identity observation.')
+                except Exception as exc:
+                    st.warning(f'Added to session, but database save failed ({type(exc).__name__}).')
+            else:
+                st.warning('Added to session only. Configure DATABASE_URL to persist it.')
+        except ValueError as exc:
+            st.error(str(exc))
+    st.divider()
     st.write('**Exportable dated catalogue observations**')
     if database_configured():
         st.success('Persistent PostgreSQL storage configured (DATABASE_URL).')
+        st.checkbox('Automatically save successful live lookups to Neon', value=False, key='v19_auto_save')
         st.write('**Database verification (synthetic record only)**')
         st.caption('Creates one fixed, clearly labelled SYSTEM_TEST_ONLY record in PostgreSQL. It is never Amazon product evidence. Repeating the test checks duplicate protection.')
         if st.button('Run database verification', key='v184_verify'):
@@ -237,6 +271,19 @@ if page == 'Free data integration':
                 st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
     else:
         st.warning('Persistent storage is NOT configured. Set DATABASE_URL to a durable PostgreSQL database in Render Environment. Until then, observations remain session-only; export CSV for backup. Render local files are ephemeral.')
+    st.subheader('V1.9: Database-backed observation timeline')
+    st.caption('Shows the number of dated product identity observations, not Amazon demand or sales. Historical months appear only when real dated records exist.')
+    if database_configured() and st.button('Refresh observation timeline from Neon', key='v19_timeline_refresh'):
+        try:
+            st.session_state.v19_history = [r for r in load_observations() if not is_test_record(r)]
+        except Exception as exc:
+            st.error(f'History retrieval failed ({type(exc).__name__}).')
+    history_records = st.session_state.get('v19_history', [])
+    if history_records:
+        st.dataframe(pd.DataFrame(timeline(history_records)), use_container_width=True, hide_index=True)
+        st.caption(f'{len(history_records)} retrieved identity records; no 12-month Amazon sales history is inferred.')
+    else:
+        st.info('Refresh after recording a product to see its dated identity history.')
     uploaded=st.file_uploader('Optional: merge a previous catalogue observations CSV',type=['csv'],key='v18_merge')
     try:
         base=pd.read_csv(uploaded) if uploaded is not None else pd.DataFrame(columns=FIELDS)
@@ -247,6 +294,14 @@ if page == 'Free data integration':
             if not is_test_record(record):
                 merged=merge_observations(merged,record)
         st.metric('Exportable catalogue observations',len(merged))
+        if uploaded is not None and database_configured() and st.button('Import validated CSV observations to Neon', key='v19_csv_import'):
+            try:
+                from research_history import validate_import_rows
+                imported = validate_import_rows(base.to_dict('records'))
+                inserted = save_observations(imported)
+                st.success(f'{inserted} new records imported; existing records skipped.')
+            except Exception as exc:
+                st.error(f'CSV import rejected: {exc}')
         if not merged.empty:
             st.dataframe(merged,use_container_width=True,hide_index=True)
         st.download_button('Download observations CSV',merged.to_csv(index=False),

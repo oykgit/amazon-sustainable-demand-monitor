@@ -69,3 +69,14 @@ V1.8.3 adds a `persistent_store.py` module and two buttons in **Free data integr
 ## V1.8.4: Database verification
 
 The Free data integration page includes **Run database verification** when `DATABASE_URL` is configured. It writes a single fixed synthetic record (`SYSTEM_TEST_ONLY`, barcode `0000000000000`, timestamp `2000-01-01T00:00:00+00:00`) to PostgreSQL, reads it back, and attempts a duplicate insert. The verification record is excluded from the application's normal session observation loading and CSV export. It is **not** a real product, Amazon observation, price, rank, sale, or purchasing signal. The synthetic test row remains in the database to allow verification across redeployments. A successful check confirms database operations, not that any real catalogue provider is accessible.
+
+## V1.9 — Durable product identity research
+
+- Operator-documented product identity form, using barcode and name, writes to Neon when configured.
+- Optional opt-in automatic Neon storage of successful live provider lookups (never bypasses provider restrictions).
+- Validated catalogue CSV import into Neon, with duplicate-safe inserts and rejection of unsupported Amazon verification claims.
+- Refreshable month-by-month counts of observed identity records, explicitly **not** sales, prices, demand, or product eligibility.
+- Synthetic V1.8.4 database verification retained. No purchases or Amazon scraping.
+- Historical Amazon demand and paid Keepa integration remain **unavailable** until lawful data access is configured.
+
+For deployment replace `app.py`, `README.md`, and add `research_history.py`, `tests/test_research_history.py` in the main branch. No new environment variables are required beyond `DATABASE_URL`.
