@@ -117,3 +117,12 @@ The **Research watchlist** sidebar workspace saves ASIN/marketplace research pri
 **Important limitations:** This version does not run background scheduling, does not collect prices automatically, does not verify Amazon demand, and does not claim continuous observations from a 365-day span. A milestone means only that the earliest and latest documented snapshots span that duration. Source references are operator-entered, not independently verified. No purchases or orders are possible.
 
 To install over V1.13, replace `app.py` and `README.md`, add `research_watchlist.py` and `tests/test_research_watchlist.py`. Existing `DATABASE_URL` stays unchanged.
+
+## V1.15: Scheduled read-only research review
+
+- New sidebar page **Scheduled review audit** previews the same due-date assessment used by GitHub Actions.
+- `.github/workflows/research-review-dry-run.yml` runs weekdays at **08:15 UTC**, subject to GitHub scheduling delays, or manually using **Actions → V1.15 Research review (read-only) → Run workflow**.
+- In GitHub **Settings → Secrets and variables → Actions**, add a repository secret named `DATABASE_URL` containing the Neon connection string. This is **separate** from Render's environment variable. Never commit or share credentials.
+- The workflow reads the Neon watchlist and saved price observations, and uploads `research_review_report.json` as a seven-day workflow artifact. No API provider calls, no inserts, no buying. It does not email or send notifications.
+- To keep dry-run disabled until you approve scheduling, do **not** add the GitHub secret; scheduled jobs will fail closed without touching the database. GitHub Actions scheduling is opt-in only after adding the secret and enabling Actions in the repository.
+- This release does not implement autonomous collection. Any future collection must use explicitly authorized data sources, quota guards, validation and separate opt-in approval.
