@@ -109,3 +109,11 @@ New sidebar page **ASIN research comparison** retrieves existing Neon ASIN price
 - **ASIN research comparison** now displays a compact readable summary with individual ASIN warnings below it. Full CSV export remains available.
 - The audit does not independently verify seller prices, Amazon demand, sales volumes, taxes, resale permissions or fee assumptions. No purchases or orders.
 - No new database configuration or paid API subscription is required.
+
+## V1.14: Operator-managed research watchlist
+
+The **Research watchlist** sidebar workspace saves ASIN/marketplace research priorities, optional traceable source references, notes and review intervals to a separate Neon PostgreSQL table (`asin_research_watchlist`). Refresh combines these entries with saved price snapshots and shows review due dates and elapsed 30/90/365-day historical coverage milestones. CSV export is provided.
+
+**Important limitations:** This version does not run background scheduling, does not collect prices automatically, does not verify Amazon demand, and does not claim continuous observations from a 365-day span. A milestone means only that the earliest and latest documented snapshots span that duration. Source references are operator-entered, not independently verified. No purchases or orders are possible.
+
+To install over V1.13, replace `app.py` and `README.md`, add `research_watchlist.py` and `tests/test_research_watchlist.py`. Existing `DATABASE_URL` stays unchanged.

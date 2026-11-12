@@ -19,17 +19,18 @@ from asin_store import save_asin_observations, load_asin_observations
 from price_history import build_snapshot, save_snapshot, load_snapshots
 from opportunity_score import compare_snapshots
 from evidence_audit import audit_snapshots
+from research_watchlist import validate_entry, upsert_entry, load_entries, watchlist_status
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.13',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.14',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.13 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.14 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
     'Stored observations', 'Data readiness', 'Product catalogue', 'Free data integration', 'Demand intelligence',
-    'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Competition analysis', 'Method & safeguards'
+    'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Research watchlist', 'Competition analysis', 'Method & safeguards'
 ]
 st.markdown('''<style>
 [data-testid="stSidebar"] [role="radiogroup"] label {font-weight: 750 !important; font-size: 1.04rem !important;}
@@ -169,7 +170,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.13: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
+    st.caption('V1.14: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -230,7 +231,7 @@ if page == 'Free data integration':
                                      'brand':result.get('brand','')})
         st.markdown(f"[Open provider record]({result['source_url']})")
     st.divider()
-    st.subheader('V1.13: ASIN-first Amazon product research')
+    st.subheader('V1.14: ASIN-first Amazon product research')
     st.caption('Record a product identity from an Amazon listing you have inspected. No automatic Amazon lookup, sales history, pricing or resale eligibility is claimed.')
     with st.form('v110_asin_form'):
         asin_input = st.text_input('Amazon ASIN (10 characters)', value='', placeholder='B008S8RJKK')
@@ -269,7 +270,7 @@ if page == 'Free data integration':
                      use_container_width=True, hide_index=True)
     st.divider()
     st.caption('Legacy barcode/EAN/UPC research remains available below.')
-    st.subheader('V1.13: Record a documented product identity')
+    st.subheader('V1.14: Record a documented product identity')
     st.caption('Enter a product you observed from its packaging or a permitted source. This does not assert Amazon availability, price, demand or resale eligibility.')
     with st.form('v19_manual_form'):
         manual_code = st.text_input('Barcode (8–14 digits)', key='v19_manual_barcode')
@@ -320,7 +321,7 @@ if page == 'Free data integration':
                 st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
     else:
         st.warning('Persistent storage is NOT configured. Set DATABASE_URL to a durable PostgreSQL database in Render Environment. Until then, observations remain session-only; export CSV for backup. Render local files are ephemeral.')
-    st.subheader('V1.13: Database-backed observation timeline')
+    st.subheader('V1.14: Database-backed observation timeline')
     st.caption('Shows the number of dated product identity observations, not Amazon demand or sales. Historical months appear only when real dated records exist.')
     if database_configured() and st.button('Refresh observation timeline from Neon', key='v19_timeline_refresh'):
         try:
@@ -429,7 +430,7 @@ if page == 'Profitability scenarios':
         st.error(str(exc))
 
 if page == 'ASIN price tracking':
-    st.subheader('V1.13: ASIN price and cost observation history')
+    st.subheader('V1.14: ASIN price and cost observation history')
     st.warning('All values are manually entered and in EUR. Profit and ROI are simplified estimates, excluding VAT, taxes, storage, subscriptions and any unentered expenses. No Amazon price feed or sales feed is connected.')
     with st.form('v112_snapshot'):
         a,b=st.columns(2)
@@ -481,7 +482,7 @@ if page == 'ASIN price tracking':
         st.info('No price snapshots loaded. Save a documented observation or load existing history.')
 
 if page == 'ASIN research comparison':
-    st.subheader('V1.13: ASIN research comparison and evidence risks')
+    st.subheader('V1.14: ASIN research comparison and evidence risks')
     st.warning('Scores measure limited research evidence and estimated economics, NOT purchase suitability or demand. Maximum score 90; no score can establish sales. All prices are operator-entered.')
     st.caption('Scoring: positive estimated profit up to 35; ROI up to 15; observation history up to 15; observed price stability up to 15; manually classified competition up to 10. Missing competition earns zero. Score is not a recommendation.')
     with st.expander('Optional manually assessed competition (one ASIN)', expanded=False):
@@ -522,7 +523,7 @@ if page == 'ASIN research comparison':
     else: st.info('Click Compare saved ASIN price snapshots to load data from Neon.')
 
 if page == 'Evidence quality audit':
-    st.subheader('V1.13: ASIN evidence quality and freshness audit')
+    st.subheader('V1.14: ASIN evidence quality and freshness audit')
     st.warning('An evidence audit does not validate Amazon sales, actual demand, seller eligibility or profitability. No live Amazon price or sales feed is connected.')
     st.caption('This audit examines documented snapshot counts, distinct dates, history span, recency and source-note traceability. It does not invent or backfill observations.')
     if st.button('Audit saved ASIN price history'):
@@ -547,6 +548,53 @@ if page == 'Evidence quality audit':
             'asin_evidence_audit_v113.csv','text/csv')
     else:
         st.info('Click Audit saved ASIN price history to inspect existing Neon observations.')
+
+if page == 'Research watchlist':
+    st.subheader('V1.14: ASIN research watchlist and review schedule')
+    st.info('This is an operator-managed review schedule, not automatic collection. Only documented snapshots already stored in Neon count toward historical coverage. Review dates are not evidence of sales or demand.')
+    with st.form('watchlist_form'):
+        w_asin=st.text_input('ASIN',placeholder='B008S8RJKK')
+        w_market=st.selectbox('Marketplace',['UK','IE'],key='watch_market')
+        w_priority=st.selectbox('Research priority',['Normal','High','Low'])
+        w_interval=st.number_input('Days between observation reviews',min_value=1,max_value=365,value=7,step=1)
+        w_source=st.text_input('Source reference (URL, invoice or documentation; optional)',max_chars=500)
+        w_notes=st.text_area('Research notes (optional)',max_chars=1000)
+        submitted=st.form_submit_button('Save or update watchlist entry in Neon')
+    if submitted:
+        try:
+            entry=validate_entry(w_asin,w_market,w_priority,int(w_interval),w_source,w_notes)
+            upsert_entry(entry)
+            st.success('Watchlist entry saved to Neon. Existing ASIN/marketplace entries are updated, not duplicated.')
+        except (ValueError,RuntimeError) as exc: st.error(str(exc))
+        except Exception as exc: st.error(f'Could not save watchlist entry ({type(exc).__name__}). Check Render logs.')
+    if st.button('Refresh watchlist and evidence coverage from Neon'):
+        try:
+            entries=load_entries()
+            snapshots=load_snapshots(limit=10000)
+            st.session_state['v114_watchlist']=watchlist_status(entries,snapshots)
+            if len(snapshots)==10000:
+                st.warning('Snapshot query reached its 10,000-record limit. Coverage may be incomplete.')
+        except Exception as exc: st.error(f'Could not load watchlist ({type(exc).__name__}). Check Render logs.')
+    watch=st.session_state.get('v114_watchlist',[])
+    if watch:
+        watch_df=pd.DataFrame(watch)
+        a,b,c=st.columns(3)
+        a.metric('Tracked ASIN/marketplaces',len(watch))
+        b.metric('Due for review',sum(r['Review status']=='Due' for r in watch))
+        c.metric('30-day history reached',sum(r['30-day coverage']=='Reached' for r in watch))
+        st.dataframe(watch_df[['ASIN','Marketplace','Priority','Observation days','History days','Next review due','Review status','Traceable source']],
+            use_container_width=True,hide_index=True)
+        selected=st.selectbox('Inspect research progress',[f"{r['ASIN']} ({r['Marketplace']})" for r in watch])
+        detail=watch[[f"{r['ASIN']} ({r['Marketplace']})" for r in watch].index(selected)]
+        st.write('**Evidence coverage milestones (elapsed history, not continuous sampling):**')
+        st.write('30 days:',detail['30-day coverage'],' | 90 days:',detail['90-day coverage'],' | 365 days:',detail['365-day coverage'])
+        st.write('**Latest documented observation:**',detail['Latest observation'])
+        st.write('**Source reference:**',detail['Source reference'] or 'Not provided')
+        st.write('**Notes:**',detail['Notes'] or 'None')
+        st.download_button('Export watchlist and review schedule CSV',watch_df.to_csv(index=False),
+            'asin_research_watchlist_v114.csv','text/csv')
+    else: st.info('Add an ASIN above, then click Refresh watchlist and evidence coverage from Neon.')
+    st.caption('Observation sources: manual operator entry; authorized external feed if separately configured; independently verified historical sales data not connected. The watchlist does not schedule background jobs or fetch Amazon prices.')
 
 if page == 'Competition analysis':
     st.subheader('Competition and market saturation research')
