@@ -98,3 +98,7 @@ For deployment replace `app.py`, `README.md`, and add `research_history.py`, `te
 - Prices and costs must be entered in EUR; convert GBP manually with a documented FX rate. No live Amazon prices, sales or verified fees are provided.
 - Profit model excludes VAT, taxes, storage, subscriptions and costs not explicitly entered. No purchase execution.
 - Existing V1.10 ASIN identity and barcode tables remain unchanged; a new `asin_price_snapshots` table is created automatically.
+
+## V1.12 — ASIN research comparison and evidence risks
+
+New sidebar page **ASIN research comparison** retrieves existing Neon ASIN price snapshots and compares documented prices, simplified profit/ROI, observation history and optional operator-classified competition. Scores (0–90) are transparent heuristics and **not buying recommendations**. Single observations and missing competition are penalised; missing verified sales, VAT/taxes and supplier restrictions are flagged. No new database tables or credentials are required. CSV export is available. Product names and observation timestamps remain available in the original ASIN and price history pages. No automated purchasing or Amazon scraping.

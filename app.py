@@ -17,17 +17,18 @@ from research_history import manual_observation, timeline
 from asin_research import make_observation as make_asin_observation, asin_url
 from asin_store import save_asin_observations, load_asin_observations
 from price_history import build_snapshot, save_snapshot, load_snapshots
+from opportunity_score import compare_snapshots
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.11',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.12',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.11 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.12 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
     'Stored observations', 'Data readiness', 'Product catalogue', 'Free data integration', 'Demand intelligence',
-    'Profitability scenarios', 'ASIN price tracking', 'Competition analysis', 'Method & safeguards'
+    'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Competition analysis', 'Method & safeguards'
 ]
 st.markdown('''<style>
 [data-testid="stSidebar"] [role="radiogroup"] label {font-weight: 750 !important; font-size: 1.04rem !important;}
@@ -167,7 +168,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.11: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
+    st.caption('V1.12: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -228,7 +229,7 @@ if page == 'Free data integration':
                                      'brand':result.get('brand','')})
         st.markdown(f"[Open provider record]({result['source_url']})")
     st.divider()
-    st.subheader('V1.11: ASIN-first Amazon product research')
+    st.subheader('V1.12: ASIN-first Amazon product research')
     st.caption('Record a product identity from an Amazon listing you have inspected. No automatic Amazon lookup, sales history, pricing or resale eligibility is claimed.')
     with st.form('v110_asin_form'):
         asin_input = st.text_input('Amazon ASIN (10 characters)', value='', placeholder='B008S8RJKK')
@@ -267,7 +268,7 @@ if page == 'Free data integration':
                      use_container_width=True, hide_index=True)
     st.divider()
     st.caption('Legacy barcode/EAN/UPC research remains available below.')
-    st.subheader('V1.11: Record a documented product identity')
+    st.subheader('V1.12: Record a documented product identity')
     st.caption('Enter a product you observed from its packaging or a permitted source. This does not assert Amazon availability, price, demand or resale eligibility.')
     with st.form('v19_manual_form'):
         manual_code = st.text_input('Barcode (8–14 digits)', key='v19_manual_barcode')
@@ -318,7 +319,7 @@ if page == 'Free data integration':
                 st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
     else:
         st.warning('Persistent storage is NOT configured. Set DATABASE_URL to a durable PostgreSQL database in Render Environment. Until then, observations remain session-only; export CSV for backup. Render local files are ephemeral.')
-    st.subheader('V1.11: Database-backed observation timeline')
+    st.subheader('V1.12: Database-backed observation timeline')
     st.caption('Shows the number of dated product identity observations, not Amazon demand or sales. Historical months appear only when real dated records exist.')
     if database_configured() and st.button('Refresh observation timeline from Neon', key='v19_timeline_refresh'):
         try:
@@ -427,13 +428,13 @@ if page == 'Profitability scenarios':
         st.error(str(exc))
 
 if page == 'ASIN price tracking':
-    st.subheader('V1.11: ASIN price and cost observation history')
+    st.subheader('V1.12: ASIN price and cost observation history')
     st.warning('All values are manually entered and in EUR. Profit and ROI are simplified estimates, excluding VAT, taxes, storage, subscriptions and any unentered expenses. No Amazon price feed or sales feed is connected.')
-    with st.form('v111_snapshot'):
+    with st.form('v112_snapshot'):
         a,b=st.columns(2)
         with a:
             price_asin=st.text_input('ASIN',placeholder='B008S8RJKK')
-            price_market=st.selectbox('Marketplace', ['UK','IE'],key='v111_market')
+            price_market=st.selectbox('Marketplace', ['UK','IE'],key='v112_market')
             selling=st.number_input('Observed selling price (€)',min_value=0.0,value=20.0,step=0.5)
             supplier=st.number_input('Supplier purchase cost (€)',min_value=0.0,value=8.0,step=0.5)
             referral_fee=st.number_input('Assumed referral fee (%)',min_value=0.0,max_value=100.0,value=15.0,step=0.5)
@@ -456,14 +457,14 @@ if page == 'ASIN price tracking':
         except Exception as exc: st.error(f'Database operation failed ({type(exc).__name__}). Check Render logs.')
     st.divider()
     st.write('**Saved ASIN price snapshots**')
-    filter_asin=st.text_input('Filter by ASIN (optional)',key='v111_filter')
+    filter_asin=st.text_input('Filter by ASIN (optional)',key='v112_filter')
     if st.button('Load price history from Neon'):
         try:
             history=load_snapshots(asin=filter_asin.strip() or None)
-            st.session_state['v111_history']=history
+            st.session_state['v112_history']=history
         except ValueError as exc: st.error(str(exc))
         except Exception as exc: st.error(f'Could not retrieve history ({type(exc).__name__}).')
-    history=st.session_state.get('v111_history',[])
+    history=st.session_state.get('v112_history',[])
     if history:
         history_df=pd.DataFrame(history)
         st.dataframe(history_df,use_container_width=True,hide_index=True)
@@ -477,6 +478,36 @@ if page == 'ASIN price tracking':
                 st.line_chart(group.sort_values('observed_at_utc').set_index('observed_at_utc')['selling_price_eur'])
     else:
         st.info('No price snapshots loaded. Save a documented observation or load existing history.')
+
+if page == 'ASIN research comparison':
+    st.subheader('V1.12: ASIN research comparison and evidence risks')
+    st.warning('Scores measure limited research evidence and estimated economics, NOT purchase suitability or demand. Maximum score 90; no score can establish sales. All prices are operator-entered.')
+    st.caption('Scoring: positive estimated profit up to 35; ROI up to 15; observation history up to 15; observed price stability up to 15; manually classified competition up to 10. Missing competition earns zero. Score is not a recommendation.')
+    with st.expander('Optional manually assessed competition (one ASIN)', expanded=False):
+        c_asin=st.text_input('Competition ASIN',placeholder='B008S8RJKK')
+        c_market=st.selectbox('Competition marketplace',['UK','IE'])
+        c_level=st.selectbox('Documented competition pressure',['Unknown','Low','Medium','High'])
+        st.caption('This classification is session-only, not saved to Neon. Use only if you have documented your research.')
+    if st.button('Compare saved ASIN price snapshots'):
+        try:
+            rows=load_snapshots(limit=10000)
+            comp={}
+            if c_asin.strip() and c_level!='Unknown':
+                from asin_research import validate_asin
+                comp[(validate_asin(c_asin),c_market)]=c_level.lower()
+            st.session_state['v112_comparison']=compare_snapshots(rows,comp)
+        except ValueError as exc: st.error(str(exc))
+        except Exception as exc: st.error(f'Could not load price snapshots ({type(exc).__name__}).')
+    comparison=st.session_state.get('v112_comparison',[])
+    if comparison:
+        df=pd.DataFrame(comparison)
+        st.dataframe(df,use_container_width=True,hide_index=True,column_config={
+            'ASIN':st.column_config.TextColumn(width='medium'),
+            'Warnings':st.column_config.TextColumn(width='large'),
+            'Research completeness score / 90':st.column_config.ProgressColumn(min_value=0,max_value=90)})
+        st.download_button('Export research comparison CSV',df.to_csv(index=False),'asin_research_comparison_v112.csv','text/csv')
+        st.info('A higher score means more favourable operator-entered economics and/or more observations under this simple rubric. It is not a demand estimate, validation of Amazon prices, or permission to buy.')
+    else: st.info('Click Compare saved ASIN price snapshots to load data from Neon.')
 
 if page == 'Competition analysis':
     st.subheader('Competition and market saturation research')
