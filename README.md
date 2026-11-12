@@ -80,3 +80,13 @@ The Free data integration page includes **Run database verification** when `DATA
 - Historical Amazon demand and paid Keepa integration remain **unavailable** until lawful data access is configured.
 
 For deployment replace `app.py`, `README.md`, and add `research_history.py`, `tests/test_research_history.py` in the main branch. No new environment variables are required beyond `DATABASE_URL`.
+
+## V1.10: ASIN-first product identity research
+
+- In **Free data integration**, enter an Amazon ASIN, UK or Ireland marketplace, product name and optional EAN/UPC and source URL.
+- **Save ASIN observation to Neon** writes to a separate `asin_identity_observations` table, leaving all prior barcode records unchanged.
+- **Load saved ASIN observations** retrieves the records and shows marketplace-specific monthly identity counts. CSV export is supported.
+- ASIN validation checks the 10-character format, not listing existence. Amazon UK and Ireland links are constructed without scraping or API requests.
+- Repeating an exact record timestamp is duplicate-safe; observations at different times are distinct.
+- All historical records are observations made when entered. No backfilling or claims of actual Amazon sales, demand, pricing or eligibility.
+- Requires the existing `DATABASE_URL` Neon setting; no new credentials or paid APIs.

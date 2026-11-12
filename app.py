@@ -14,12 +14,14 @@ from provider_guard import ProviderGuard
 from persistent_store import configured as database_configured, save_observations, load_observations
 from database_verification import verify_database, is_test_record
 from research_history import manual_observation, timeline
+from asin_research import make_observation as make_asin_observation, asin_url
+from asin_store import save_asin_observations, load_asin_observations
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.9',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.10',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.9 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.10 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -159,7 +161,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.9: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
+    st.caption('V1.10: manual documented records, durable history, provider cooldowns and diagnostics. No sales inference.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -220,7 +222,46 @@ if page == 'Free data integration':
                                      'brand':result.get('brand','')})
         st.markdown(f"[Open provider record]({result['source_url']})")
     st.divider()
-    st.subheader('V1.9: Record a documented product identity')
+    st.subheader('V1.10: ASIN-first Amazon product research')
+    st.caption('Record a product identity from an Amazon listing you have inspected. No automatic Amazon lookup, sales history, pricing or resale eligibility is claimed.')
+    with st.form('v110_asin_form'):
+        asin_input = st.text_input('Amazon ASIN (10 characters)', value='', placeholder='B008S8RJKK')
+        asin_market = st.selectbox('Amazon marketplace', ['UK', 'IE'], format_func=lambda x: 'Amazon UK' if x == 'UK' else 'Amazon Ireland')
+        asin_name = st.text_input('Product name from listing')
+        asin_barcode = st.text_input('EAN / UPC (optional; 8–14 digits)')
+        asin_source = st.text_input('Source URL (optional; defaults to Amazon product link)')
+        asin_submit = st.form_submit_button('Save ASIN observation to Neon')
+    if asin_submit:
+        try:
+            record = make_asin_observation(asin_input, asin_market, asin_name, asin_barcode, asin_source)
+            if database_configured():
+                inserted = save_asin_observations([record])
+                st.success(f'ASIN observation saved to Neon ({inserted} new record).')
+            else:
+                st.error('Neon is not configured; no observation was saved. Set DATABASE_URL in Render.')
+        except ValueError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error(f'ASIN database save failed ({type(exc).__name__}). Check Render logs; never share credentials.')
+    st.caption('An ASIN can have different offers and availability in each marketplace. A product-page link does not verify that a listing exists.')
+    if database_configured() and st.button('Load saved ASIN observations', key='v110_asin_load'):
+        try:
+            st.session_state.v110_asin_records = load_asin_observations()
+        except Exception as exc:
+            st.error(f'ASIN retrieval failed ({type(exc).__name__}).')
+    asin_records = st.session_state.get('v110_asin_records', [])
+    if asin_records:
+        asin_frame = pd.DataFrame(asin_records)
+        st.dataframe(asin_frame, use_container_width=True, hide_index=True)
+        st.download_button('Download ASIN observations CSV', asin_frame.to_csv(index=False),
+                           'asin_observations.csv', 'text/csv', key='v110_asin_export')
+        asin_frame['month'] = asin_frame['observed_at_utc'].astype(str).str[:7]
+        st.write('**Monthly ASIN identity observation counts (not demand)**')
+        st.dataframe(asin_frame.groupby(['asin','marketplace','month']).size().reset_index(name='observations'),
+                     use_container_width=True, hide_index=True)
+    st.divider()
+    st.caption('Legacy barcode/EAN/UPC research remains available below.')
+    st.subheader('V1.10: Record a documented product identity')
     st.caption('Enter a product you observed from its packaging or a permitted source. This does not assert Amazon availability, price, demand or resale eligibility.')
     with st.form('v19_manual_form'):
         manual_code = st.text_input('Barcode (8–14 digits)', key='v19_manual_barcode')
@@ -271,7 +312,7 @@ if page == 'Free data integration':
                 st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
     else:
         st.warning('Persistent storage is NOT configured. Set DATABASE_URL to a durable PostgreSQL database in Render Environment. Until then, observations remain session-only; export CSV for backup. Render local files are ephemeral.')
-    st.subheader('V1.9: Database-backed observation timeline')
+    st.subheader('V1.10: Database-backed observation timeline')
     st.caption('Shows the number of dated product identity observations, not Amazon demand or sales. Historical months appear only when real dated records exist.')
     if database_configured() and st.button('Refresh observation timeline from Neon', key='v19_timeline_refresh'):
         try:
