@@ -102,3 +102,10 @@ For deployment replace `app.py`, `README.md`, and add `research_history.py`, `te
 ## V1.12 — ASIN research comparison and evidence risks
 
 New sidebar page **ASIN research comparison** retrieves existing Neon ASIN price snapshots and compares documented prices, simplified profit/ROI, observation history and optional operator-classified competition. Scores (0–90) are transparent heuristics and **not buying recommendations**. Single observations and missing competition are penalised; missing verified sales, VAT/taxes and supplier restrictions are flagged. No new database tables or credentials are required. CSV export is available. Product names and observation timestamps remain available in the original ASIN and price history pages. No automated purchasing or Amazon scraping.
+
+## V1.13: evidence quality and clearer comparison
+
+- **Evidence quality audit** in the sidebar reads existing ASIN price snapshots from Neon and reports distinct observation days, historical span, last-observation age, source-note traceability and missing cost assumptions.
+- **ASIN research comparison** now displays a compact readable summary with individual ASIN warnings below it. Full CSV export remains available.
+- The audit does not independently verify seller prices, Amazon demand, sales volumes, taxes, resale permissions or fee assumptions. No purchases or orders.
+- No new database configuration or paid API subscription is required.
