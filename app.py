@@ -11,12 +11,13 @@ from product_catalogue import lookup_barcode
 from catalogue_sources import lookup_product, observation, merge_observations, FIELDS, validate_barcode
 from api_diagnostics import check_provider, CatalogueConnectionError
 from provider_guard import ProviderGuard
+from persistent_store import configured as database_configured, save_observations, load_observations
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.2',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.8.3',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.8.2 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.8.3 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -156,7 +157,7 @@ if page == 'Product catalogue':
     st.caption('Source: Open Food Facts community-maintained data. Product coverage and correctness vary. Data may be subject to Open Database License obligations; check terms before reuse.')
 if page == 'Free data integration':
     st.subheader('Free data integration centre')
-    st.caption('V1.8.2: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
+    st.caption('V1.8.3: session-scoped cache, provider cooldowns and request log. These controls do not bypass access restrictions.')
     if 'provider_guard' not in st.session_state:
         st.session_state.provider_guard = ProviderGuard()
     guard = st.session_state.provider_guard
@@ -210,7 +211,22 @@ if page == 'Free data integration':
         st.markdown(f"[Open provider record]({result['source_url']})")
     st.divider()
     st.write('**Exportable dated catalogue observations**')
-    st.warning('Session records are temporary on Render. Download the CSV and commit it to `data/catalogue_observations.csv` in GitHub for persistence. Uploading or viewing a CSV does not automatically save it to GitHub.')
+    if database_configured():
+        st.success('Persistent PostgreSQL storage configured (DATABASE_URL).')
+        if st.button('Save session observations to database', key='v183_save'):
+            try:
+                inserted = save_observations(st.session_state.catalogue_observations)
+                st.success(f'{inserted} new observations saved; duplicates ignored.')
+            except Exception as exc:
+                st.error(f'Database save failed ({type(exc).__name__}). Check Render database configuration and logs.')
+        if st.button('Load saved observations from database', key='v183_load'):
+            try:
+                st.session_state.catalogue_observations = load_observations()
+                st.success(f'Loaded {len(st.session_state.catalogue_observations)} observations (maximum 10,000).')
+            except Exception as exc:
+                st.error(f'Database read failed ({type(exc).__name__}). Check Render database configuration and logs.')
+    else:
+        st.warning('Persistent storage is NOT configured. Set DATABASE_URL to a durable PostgreSQL database in Render Environment. Until then, observations remain session-only; export CSV for backup. Render local files are ephemeral.')
     uploaded=st.file_uploader('Optional: merge a previous catalogue observations CSV',type=['csv'],key='v18_merge')
     try:
         base=pd.read_csv(uploaded) if uploaded is not None else pd.DataFrame(columns=FIELDS)
