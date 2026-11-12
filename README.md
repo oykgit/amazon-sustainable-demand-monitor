@@ -90,3 +90,11 @@ For deployment replace `app.py`, `README.md`, and add `research_history.py`, `te
 - Repeating an exact record timestamp is duplicate-safe; observations at different times are distinct.
 - All historical records are observations made when entered. No backfilling or claims of actual Amazon sales, demand, pricing or eligibility.
 - Requires the existing `DATABASE_URL` Neon setting; no new credentials or paid APIs.
+
+## V1.11 — ASIN price tracking and stronger navigation
+- Sidebar navigation labels use bold, slightly larger type.
+- New **ASIN price tracking** workspace saves manually documented price and supplier cost snapshots to Neon PostgreSQL.
+- Shows estimated per-unit profit/ROI, source notes, historical snapshots, CSV export, and observed price timelines for repeat observations.
+- Prices and costs must be entered in EUR; convert GBP manually with a documented FX rate. No live Amazon prices, sales or verified fees are provided.
+- Profit model excludes VAT, taxes, storage, subscriptions and costs not explicitly entered. No purchase execution.
+- Existing V1.10 ASIN identity and barcode tables remain unchanged; a new `asin_price_snapshots` table is created automatically.
