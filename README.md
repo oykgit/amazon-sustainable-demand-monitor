@@ -130,3 +130,9 @@ To install over V1.13, replace `app.py` and `README.md`, add `research_watchlist
 ## V1.16 controlled collection preview
 
 The **Controlled collection preview** sidebar page accepts a user-supplied, authorized CSV of documented ASIN price/cost observations. Download the schema template in the page. It validates identifier, marketplace, timezone-aware timestamps, numeric costs, source URL, permission reference, row quotas (250) and file size (1 MB), and returns a JSON audit report. **It performs zero HTTP requests, zero database writes and zero purchases.** A source authorization reference is operator-provided and not independently verified. This is an intake preview, not live scheduled collection. Existing V1.15 scheduled read-only review remains unchanged.
+
+## V1.17: Operator-approved Neon ingestion
+
+The **Controlled Neon ingestion** sidebar page accepts an authorized CSV using the exact V1.16 schema. It rejects feeds with any invalid row, previews a SHA-256 fingerprint, requires a source authorization attestation and the exact phrase `I APPROVE THIS CSV INGESTION`, and then writes validated price snapshots into the existing Neon `asin_price_snapshots` table. It adds `asin_price_feed_provenance` to store the claimed HTTPS source, authorization reference, feed hash, and ingestion time for newly inserted records. Existing rows are not overwritten; duplicates are skipped. The database transaction is atomic. A JSON receipt reports counts and duplicates.
+
+This does not independently establish source permissions, verify Amazon prices or sales, call external APIs, schedule ingestion, or purchase anything. Never approve the example template as real research. The existing V1.15 scheduled workflow remains read-only. No new environment variables are required beyond `DATABASE_URL`.
