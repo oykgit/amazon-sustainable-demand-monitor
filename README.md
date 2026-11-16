@@ -126,3 +126,7 @@ To install over V1.13, replace `app.py` and `README.md`, add `research_watchlist
 - The workflow reads the Neon watchlist and saved price observations, and uploads `research_review_report.json` as a seven-day workflow artifact. No API provider calls, no inserts, no buying. It does not email or send notifications.
 - To keep dry-run disabled until you approve scheduling, do **not** add the GitHub secret; scheduled jobs will fail closed without touching the database. GitHub Actions scheduling is opt-in only after adding the secret and enabling Actions in the repository.
 - This release does not implement autonomous collection. Any future collection must use explicitly authorized data sources, quota guards, validation and separate opt-in approval.
+
+## V1.16 controlled collection preview
+
+The **Controlled collection preview** sidebar page accepts a user-supplied, authorized CSV of documented ASIN price/cost observations. Download the schema template in the page. It validates identifier, marketplace, timezone-aware timestamps, numeric costs, source URL, permission reference, row quotas (250) and file size (1 MB), and returns a JSON audit report. **It performs zero HTTP requests, zero database writes and zero purchases.** A source authorization reference is operator-provided and not independently verified. This is an intake preview, not live scheduled collection. Existing V1.15 scheduled read-only review remains unchanged.
