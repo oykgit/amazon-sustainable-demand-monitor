@@ -141,3 +141,11 @@ Provider endpoint must serve JSON `{ "observations": [ { ...fields matching the 
 Render environment variables: `AUTHORIZED_FEED_URL`, `AUTHORIZED_FEED_HOST` (exact HTTPS hostname), `AUTHORIZED_FEED_PROVIDER`, `AUTHORIZED_FEED_PERMISSION_REF`. GitHub Actions: repository secrets `AUTHORIZED_FEED_URL`, `AUTHORIZED_FEED_PERMISSION_REF`; repository variables `AUTHORIZED_FEED_HOST`, `AUTHORIZED_FEED_PROVIDER`. Without all four, workflow returns `NOT_CONFIGURED` without network requests. Do not use private or unauthorized endpoints. The app does not manage credentials or bearer tokens.
 
 **Limitations:** Source permission is operator-attested. Hostname checks, public DNS checks, redirect rejection and response size limits are defense-in-depth, not a substitute for network egress controls or vetted provider contracts. DNS resolution and connection are not pinned to the same IP; configure only trusted provider hosts. A scheduled preview is not historical data collection or automatic Neon ingestion.
+
+## V1.19 first real catalogue integration (books only)
+
+Adds a **Open Library book catalogue** sidebar page and `openlibrary_catalogue.py`. Enter an ISBN and click **Look up book metadata (read-only)** to request the public Open Library ISBN JSON endpoint (`https://openlibrary.org/isbn/<ISBN>.json`). ISBN check digits are verified; endpoint host is fixed, redirects are rejected, and response size is capped at 256 KB. A single click performs one attempted request; no automatic polling. Open Library availability and its API policy apply. No credentials required for the public lookup. This is an opt-in catalogue metadata test, not a licensed Amazon data feed.
+
+**Limits:** Books only; the lookup provides title, publisher and publication date where available. It does **not** prove that the ISBN is sold on Amazon UK or Ireland, identify an Amazon ASIN, retrieve Amazon prices or sales volumes, or establish 12-month demand. No Neon writes, purchases or scheduled Open Library collection. Existing V1.18 authorized JSON feed and GitHub Actions remain unchanged.
+
+To install, replace `app.py` and `README.md`, add `openlibrary_catalogue.py` and `tests/test_openlibrary_catalogue.py` in the GitHub main branch. Keep all other existing repository files and workflows intact.
