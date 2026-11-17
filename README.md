@@ -153,3 +153,11 @@ To install, replace `app.py` and `README.md`, add `openlibrary_catalogue.py` and
 ## V1.19.1 Open Library redirect and diagnostics patch
 
 Open Library ISBN endpoints may redirect to canonical `/books/OL...M.json` records. The original V1.19 code rejected every redirect with `ValueError('Redirect prohibited')`. V1.19.1 permits at most two redirects, only to HTTPS `openlibrary.org` canonical book JSON paths, and rejects other destinations. It reports sanitized validation, HTTP and network errors in the Streamlit UI and clears stale lookup results after failures. This is a read-only metadata preview with no Neon writes, no Amazon sales claims, and no purchasing. Replace `app.py`, `openlibrary_catalogue.py`, `README.md`, and `tests/test_openlibrary_catalogue.py` on `main`; preserve all other files and workflows.
+
+## V1.20 General product catalogue (read-only)
+
+Adds a sidebar **General product catalogue** lookup and `general_catalogue.py` for one manually initiated HTTPS lookup by checksum-validated GTIN-8, UPC-12, EAN-13 or GTIN-14. Select **Open Food Facts** (packaged foods) or **Open Beauty Facts** (cosmetics). The fixed host and API v2 endpoint do not accept arbitrary URLs. Redirects are rejected, responses are capped at 256 KB, and network requests time out after 10 seconds. No credentials are required for public lookups, but provider API usage rules, attribution and licensing apply. This does not authorize bulk scraping or scheduled collection.
+
+**Caution:** Earlier tests encountered HTTP 403 from Open Food Facts on Render. This can recur. V1.20 reports the provider denial and does not bypass access restrictions. A 404/not-found result does not mean a product does not exist. Community product names, brands and categories may be incomplete or inaccurate. No Amazon UK or Ireland ASIN, listing, prices, seller permissions, units sold or 12-month demand are verified. No database writes or purchases.
+
+To install on V1.19.1: replace `app.py` and `README.md`; add `general_catalogue.py` and `tests/test_general_catalogue.py` on GitHub `main`. Keep all other repository files and workflows intact. Verify the new page on Render and share the actual JSON result or error. This is an on-demand catalogue preview, not unattended automated research collection.

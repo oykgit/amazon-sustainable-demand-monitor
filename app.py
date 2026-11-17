@@ -25,17 +25,18 @@ from controlled_collection import inspect_csv, COLUMNS
 from controlled_ingestion import prepare_feed, ingest_approved_feed
 from authorized_provider import collect as preview_authorized_provider
 from openlibrary_catalogue import preview as preview_openlibrary
+from general_catalogue import preview as preview_general_catalogue, PROVIDERS as GENERAL_PROVIDERS
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.19.1',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.20',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.19.1 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.20 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
     'Stored observations', 'Data readiness', 'Product catalogue', 'Free data integration', 'Demand intelligence',
-    'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Research watchlist', 'Scheduled review audit', 'Controlled collection preview', 'Controlled Neon ingestion', 'Authorized provider preview', 'Open Library book catalogue', 'Competition analysis', 'Method & safeguards'
+    'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Research watchlist', 'Scheduled review audit', 'Controlled collection preview', 'Controlled Neon ingestion', 'Authorized provider preview', 'Open Library book catalogue', 'General product catalogue', 'Competition analysis', 'Method & safeguards'
 ]
 st.markdown('''<style>
 [data-testid="stSidebar"] [role="radiogroup"] label {font-weight: 750 !important; font-size: 1.04rem !important;}
@@ -704,7 +705,7 @@ if page == 'Authorized provider preview':
         st.download_button('Download provider dry-run report', json.dumps(result,indent=2), 'v118_provider_report.json', 'application/json')
 
 if page == 'Open Library book catalogue':
-    st.subheader('V1.19.1: Open Library catalogue connection fix (books only)')
+    st.subheader('V1.20: Open Library catalogue connection fix (books only)')
     st.info('Open Library can provide book title and publication metadata by ISBN. This is not Amazon pricing, sales history, demand, or an ASIN match.')
     st.caption('One manual HTTPS request when you click Lookup. No automatic scheduling, no Neon writes, no purchases. Respect provider API usage rules.')
     isbn_input = st.text_input('ISBN-10 or ISBN-13', value='9780140328721', key='v119_isbn')
@@ -721,6 +722,26 @@ if page == 'Open Library book catalogue':
         st.json(st.session_state['v119_result'])
         import json
         st.download_button('Download catalogue report JSON', json.dumps(st.session_state['v119_result'], indent=2), 'v119_catalogue_preview.json', 'application/json')
+
+if page == 'General product catalogue':
+    st.subheader('V1.20: General product catalogue (read-only)')
+    st.info('Lookup packaged foods or cosmetics by GTIN/EAN/UPC through a community catalogue. A barcode match does not establish Amazon listing, sales, price or UK/IE demand.')
+    st.caption('Manual lookup only. Provider terms and availability apply. Some providers may return HTTP 403 from Render; do not bypass restrictions. No Neon writes or purchases.')
+    catalogue_provider = st.selectbox('Public catalogue provider', list(GENERAL_PROVIDERS), key='v120_provider')
+    catalogue_barcode = st.text_input('GTIN / EAN / UPC barcode', value='3017620422003', key='v120_barcode')
+    if st.button('Look up product metadata (read-only)', key='v120_lookup'):
+        try:
+            st.session_state['v120_result'] = preview_general_catalogue(catalogue_provider, catalogue_barcode)
+        except ValueError as exc:
+            st.session_state.pop('v120_result', None)
+            st.error(f'Catalogue lookup failed: {exc}. No database writes occurred.')
+        except Exception as exc:
+            st.session_state.pop('v120_result', None)
+            st.error(f'Catalogue lookup failed ({type(exc).__name__}). No database writes occurred.')
+    if 'v120_result' in st.session_state:
+        st.json(st.session_state['v120_result'])
+        import json
+        st.download_button('Download product catalogue report JSON', json.dumps(st.session_state['v120_result'], indent=2), 'v120_general_catalogue.json', 'application/json')
 
 if page == 'Competition analysis':
     st.subheader('Competition and market saturation research')
