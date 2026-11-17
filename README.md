@@ -149,3 +149,7 @@ Adds a **Open Library book catalogue** sidebar page and `openlibrary_catalogue.p
 **Limits:** Books only; the lookup provides title, publisher and publication date where available. It does **not** prove that the ISBN is sold on Amazon UK or Ireland, identify an Amazon ASIN, retrieve Amazon prices or sales volumes, or establish 12-month demand. No Neon writes, purchases or scheduled Open Library collection. Existing V1.18 authorized JSON feed and GitHub Actions remain unchanged.
 
 To install, replace `app.py` and `README.md`, add `openlibrary_catalogue.py` and `tests/test_openlibrary_catalogue.py` in the GitHub main branch. Keep all other existing repository files and workflows intact.
+
+## V1.19.1 Open Library redirect and diagnostics patch
+
+Open Library ISBN endpoints may redirect to canonical `/books/OL...M.json` records. The original V1.19 code rejected every redirect with `ValueError('Redirect prohibited')`. V1.19.1 permits at most two redirects, only to HTTPS `openlibrary.org` canonical book JSON paths, and rejects other destinations. It reports sanitized validation, HTTP and network errors in the Streamlit UI and clears stale lookup results after failures. This is a read-only metadata preview with no Neon writes, no Amazon sales claims, and no purchasing. Replace `app.py`, `openlibrary_catalogue.py`, `README.md`, and `tests/test_openlibrary_catalogue.py` on `main`; preserve all other files and workflows.

@@ -28,9 +28,9 @@ from openlibrary_catalogue import preview as preview_openlibrary
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.19',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.19.1',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.19 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.19.1 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -704,15 +704,19 @@ if page == 'Authorized provider preview':
         st.download_button('Download provider dry-run report', json.dumps(result,indent=2), 'v118_provider_report.json', 'application/json')
 
 if page == 'Open Library book catalogue':
-    st.subheader('V1.19: First public catalogue integration (books only)')
+    st.subheader('V1.19.1: Open Library catalogue connection fix (books only)')
     st.info('Open Library can provide book title and publication metadata by ISBN. This is not Amazon pricing, sales history, demand, or an ASIN match.')
     st.caption('One manual HTTPS request when you click Lookup. No automatic scheduling, no Neon writes, no purchases. Respect provider API usage rules.')
     isbn_input = st.text_input('ISBN-10 or ISBN-13', value='9780140328721', key='v119_isbn')
     if st.button('Look up book metadata (read-only)', key='v119_lookup'):
         try:
             st.session_state['v119_result'] = preview_openlibrary(isbn_input)
+        except ValueError as exc:
+            st.session_state.pop('v119_result', None)
+            st.error(f'Catalogue lookup failed: {str(exc)}. No database writes occurred.')
         except Exception as exc:
-            st.error(f'Catalogue lookup failed: {type(exc).__name__}. Check the ISBN, provider availability and logs. No database writes occurred.')
+            st.session_state.pop('v119_result', None)
+            st.error(f'Catalogue lookup failed ({type(exc).__name__}). No database writes occurred. Check Render logs.')
     if 'v119_result' in st.session_state:
         st.json(st.session_state['v119_result'])
         import json

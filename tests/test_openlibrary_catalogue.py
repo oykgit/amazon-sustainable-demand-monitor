@@ -22,3 +22,23 @@ class OpenLibraryTests(unittest.TestCase):
         with self.assertRaises(ValueError): preview('9780140328721',fetcher=lambda _:b' '*256001)
 
 if __name__=='__main__': unittest.main()
+
+class RedirectTests(unittest.TestCase):
+    def test_canonical_redirect(self):
+        from openlibrary_catalogue import validate_redirect
+        self.assertEqual(validate_redirect('https://openlibrary.org/books/OL7353617M.json'), 'https://openlibrary.org/books/OL7353617M.json')
+    def test_reject_other_host(self):
+        from openlibrary_catalogue import validate_redirect
+        with self.assertRaises(ValueError): validate_redirect('https://evil.example/books/OL7353617M.json')
+    def test_reject_http(self):
+        from openlibrary_catalogue import validate_redirect
+        with self.assertRaises(ValueError): validate_redirect('http://openlibrary.org/books/OL7353617M.json')
+    def test_reject_other_path(self):
+        from openlibrary_catalogue import validate_redirect
+        with self.assertRaises(ValueError): validate_redirect('https://openlibrary.org/account/login')
+    def test_reject_query(self):
+        from openlibrary_catalogue import validate_redirect
+        with self.assertRaises(ValueError): validate_redirect('https://openlibrary.org/books/OL7353617M.json?x=1')
+    def test_publishers_unexpected_type(self):
+        result = preview('9780140328721', fetcher=lambda _: b'{"title":"Matilda","publishers":null}')
+        self.assertEqual(result['publisher_names'], [])
