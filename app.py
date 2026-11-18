@@ -1,5 +1,6 @@
 import streamlit as st
 from provider_readiness import readiness
+from historical_provider import preview_keepa
 import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
@@ -31,9 +32,9 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.22.1',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.23',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.22.1 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.23 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -837,3 +838,14 @@ if page == 'Commercial provider readiness':
     provider = st.selectbox('Commercial research provider', ['Keepa', 'DataForSEO'], key='v122_provider')
     st.json(readiness(provider))
     st.warning('Historical Amazon price/rank data is not connected. Do not interpret configuration readiness as verified demand, product profitability or provider authorization.')
+
+if page == 'Commercial provider readiness':
+    st.divider()
+    st.subheader('V1.23: Keepa one-product connection test')
+    st.caption('Optional, operator-triggered request only. Keepa may charge tokens. UK Amazon domain only; no Ireland-specific Amazon marketplace is implied. The configured request budget is not a durable cross-session quota.')
+    asin_input = st.text_input('ASIN for Keepa preview', value='B008S8RJKK', key='v123_asin')
+    if st.button('Request one Keepa product preview (may use API tokens)', key='v123_keepa'):
+        report = preview_keepa(asin_input)
+        st.json(report)
+        if report['status'] != 'PRODUCT_FOUND':
+            st.info('Check provider credentials and network opt-in if NOT_CONFIGURED; otherwise review the status without repeatedly retrying.')
