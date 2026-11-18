@@ -31,9 +31,9 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.22',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.22.1',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.22 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.22.1 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -41,57 +41,46 @@ NAVIGATION = [
     'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Research watchlist', 'Scheduled review audit', 'Controlled collection preview', 'Controlled Neon ingestion', 'Authorized provider preview', 'Open Library book catalogue', 'General product catalogue', 'UPCitemdb provider preview', 'Competition analysis', 'Method & safeguards'
 ]
 st.markdown("""<style>
-/* Two independent, distinct horizontal navigation bands. */
-.st-key-primary_navigation [data-testid="stButton"] button {background:#163d65;color:#fff;border:1px solid #27639b;font-weight:750;min-height:3.2rem;white-space:normal;line-height:1.15}
+/* Three always-visible navigation bands, 2 rows x 4 columns each. */
+.st-key-primary_navigation [data-testid="stButton"] button {background:#163d65;color:#fff;border:1px solid #27639b;font-weight:750;min-height:3.6rem;white-space:normal;line-height:1.2}
 .st-key-primary_navigation [data-testid="stButton"] button:hover {background:#255e95;color:#fff}
-.st-key-secondary_navigation [data-testid="stButton"] button {background:#165a50;color:#fff;border:1px solid #258979;font-weight:750;min-height:3.2rem;white-space:normal;line-height:1.15}
+.st-key-secondary_navigation [data-testid="stButton"] button {background:#165a50;color:#fff;border:1px solid #258979;font-weight:750;min-height:3.6rem;white-space:normal;line-height:1.2}
 .st-key-secondary_navigation [data-testid="stButton"] button:hover {background:#218373;color:#fff}
+.st-key-tertiary_navigation [data-testid="stButton"] button {background:#70421b;color:#fff;border:1px solid #9a6739;font-weight:750;min-height:3.6rem;white-space:normal;line-height:1.2}
+.st-key-tertiary_navigation [data-testid="stButton"] button:hover {background:#955c2a;color:#fff}
 </style>""", unsafe_allow_html=True)
 
-# Split into two separately paginated 2-row x 5-column navigation bands.
-PRIMARY_NAV = NAVIGATION[:12]
-SECONDARY_NAV = NAVIGATION[12:] + ['Commercial provider readiness']
+# Every workspace is visible: three bands of eight buttons, no pagination.
+ALL_WORKSPACES = NAVIGATION + ['Commercial provider readiness']
+assert len(ALL_WORKSPACES) == 24 and len(set(ALL_WORKSPACES)) == 24
+PRIMARY_NAV = ALL_WORKSPACES[:8]
+SECONDARY_NAV = ALL_WORKSPACES[8:16]
+TERTIARY_NAV = ALL_WORKSPACES[16:]
 if 'v122_page' not in st.session_state:
     st.session_state.v122_page = 'Overview'
-if 'v122_primary_index' not in st.session_state:
-    st.session_state.v122_primary_index = 0
-if 'v122_secondary_index' not in st.session_state:
-    st.session_state.v122_secondary_index = 0
 
-def navigation_band(items, label, key, index_key):
+def navigation_band(items, label, key):
     st.markdown(f'**{label}**')
-    current = st.session_state[index_key]
-    page_count = (len(items) + 9) // 10
-    current = max(0, min(current, page_count - 1))
-    st.session_state[index_key] = current
     with st.container(key=key):
-        visible = items[current * 10:(current + 1) * 10]
-        for row_start in (0, 5):
-            cols = st.columns(5)
-            for j, item in enumerate(visible[row_start:row_start+5]):
+        for row_start in (0, 4):
+            cols = st.columns(4)
+            for j, item in enumerate(items[row_start:row_start+4]):
                 with cols[j]:
                     selected = item == st.session_state.v122_page
                     if st.button(('● ' if selected else '') + item, key=f'{key}_{item}', use_container_width=True):
                         st.session_state.v122_page = item
                         st.rerun()
-    if page_count > 1:
-        a, b, c = st.columns([1, 2, 1])
-        if a.button('◀ Previous', key=key+'_prev', disabled=current == 0):
-            st.session_state[index_key] = current - 1
-            st.rerun()
-        b.caption(f'Navigation set {current+1} of {page_count} · {len(items)} workspaces')
-        if c.button('Next ▶', key=key+'_next', disabled=current >= page_count - 1):
-            st.session_state[index_key] = current + 1
-            st.rerun()
 
-navigation_band(PRIMARY_NAV, 'RESEARCH & ANALYSIS', 'primary_navigation', 'v122_primary_index')
+navigation_band(PRIMARY_NAV, 'RESEARCH & CATALOGUE', 'primary_navigation')
 with st.expander('Research settings (budget and marketplaces)', expanded=False):
     budget = st.slider('Reselling budget (€)', 500, 1000, 750, 50)
     markets = st.multiselect('Market', ['UK', 'IE'], default=['UK', 'IE'])
     st.caption('Amounts are EUR. UK prices require documented conversion. Operator-attested evidence is not independently verified.')
 
 st.divider()
-navigation_band(SECONDARY_NAV, 'DATA, PROVIDERS & SAFEGUARDS', 'secondary_navigation', 'v122_secondary_index')
+navigation_band(SECONDARY_NAV, 'DEMAND & EVIDENCE', 'secondary_navigation')
+st.divider()
+navigation_band(TERTIARY_NAV, 'PROVIDERS & SAFEGUARDS', 'tertiary_navigation')
 page = st.session_state.v122_page
 st.caption(f'Current workspace: {page}')
 st.divider()
@@ -115,7 +104,7 @@ if page == 'Overview':
     c.metric('Verified Amazon sales feed', 'Not connected')
     st.write('**Stored data readiness**')
     st.dataframe(overview, use_container_width=True, hide_index=True)
-    st.caption('Use the sidebar to open a research workspace. All profitability and competition results are scenario assessments, not verified investment opportunities.')
+    st.caption('Use the horizontal navigation to open a research workspace. All profitability and competition results are scenario assessments, not verified investment opportunities.')
 
 def download_template(label,fields,filename,example):
     st.download_button(label,pd.DataFrame([example]).reindex(columns=fields).to_csv(index=False),filename,'text/csv')

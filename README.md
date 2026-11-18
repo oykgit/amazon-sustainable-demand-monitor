@@ -175,3 +175,8 @@ The vertical navigation is replaced with **two horizontal navigation bands** on 
 Adds **Commercial provider readiness**, an offline configuration diagnostic for Keepa and DataForSEO. Optional Render environment variables: `KEEPA_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, `RESEARCH_PROVIDER_MAX_DAILY_REQUESTS` (default 0), and `RESEARCH_PROVIDER_NETWORK_ENABLED` (ignored by V1.22, as network calls are not implemented). **Do not enter credentials in the dashboard or GitHub repository.** V1.22 does not connect to either paid API, charge money, collect data, modify Neon, or place orders. A `CONFIGURATION_READY_NOT_CONNECTED` status does not mean that the provider has been tested or that demand data is available.
 
 Install on `main`: replace `app.py` and `README.md`; add `provider_readiness.py` and `tests/test_provider_readiness.py`. Preserve all other existing repository files, tests, and GitHub Actions workflows. Do not configure or purchase a paid service until its terms, endpoints and costs have been checked and explicitly approved.
+
+
+## V1.22.1 — Always-visible 4-column horizontal navigation
+
+Navigation is displayed in three distinct color-coded horizontal bands (navy, teal, bronze), each with exactly two rows of four workspace buttons. All 24 workspaces are accessible without Previous/Next pagination. Existing research, provider readiness, Neon, and safeguards logic is unchanged. No commercial API connection or purchasing is enabled by this UI-only patch. Replace only `app.py` and `README.md` on the `main` branch; retain every other existing file.
