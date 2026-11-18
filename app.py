@@ -3,6 +3,7 @@ from provider_readiness import readiness
 from historical_provider import preview_keepa
 from historical_evidence import analyse as analyse_historical_evidence, REQUIRED as HISTORICAL_FIELDS
 from keepa_normalizer import normalize as normalize_keepa
+from keepa_evidence_bridge import assess_keepa_payload
 import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
@@ -34,9 +35,9 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.25',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.26',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.25 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.26 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -903,3 +904,28 @@ if page == 'Commercial provider readiness':
                                'v125_normalized_keepa.json', 'application/json', key='v125_download')
         except (ValueError, UnicodeError, TypeError, json.JSONDecodeError) as exc:
             st.error(f'Normalization failed: {exc}. No database writes.')
+
+if page == 'Commercial provider readiness':
+    st.divider()
+    st.subheader('V1.26: Keepa history → 12-month evidence report (offline)')
+    st.info('Supply a permitted Keepa JSON product payload. This reuses the V1.25 normalizer and V1.24 coverage analysis without external requests or Neon writes. It does not verify real sales or provider origin.')
+    asin_v126 = st.text_input('ASIN for V1.26 evidence report', value='B008S8RJKK', key='v126_asin')
+    fx_v126 = st.text_input('Optional operator GBP-to-EUR rate (not date-specific)', value='', key='v126_fx')
+    upload_v126 = st.file_uploader('Keepa JSON for 12-month assessment (max 2 MB)', type=['json'], key='v126_json')
+    if upload_v126 is not None:
+        try:
+            import json
+            raw_v126 = upload_v126.getvalue()
+            if len(raw_v126) > 2_000_000:
+                raise ValueError('JSON exceeds 2 MB')
+            product_v126 = json.loads(raw_v126.decode('utf-8-sig'))
+            if isinstance(product_v126, dict) and isinstance(product_v126.get('products'), list):
+                if len(product_v126['products']) != 1:
+                    raise ValueError('Exactly one product is required')
+                product_v126 = product_v126['products'][0]
+            report_v126 = assess_keepa_payload(product_v126, asin_v126, fx_gbp_to_eur=(fx_v126.strip() or None))
+            st.json(report_v126)
+            st.download_button('Download V1.26 evidence report', json.dumps(report_v126, indent=2),
+                               'v126_keepa_evidence.json', 'application/json', key='v126_download')
+        except (ValueError, UnicodeError, TypeError) as exc:
+            st.error(f'V1.26 analysis failed: {exc}. No database writes.')
