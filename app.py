@@ -2,6 +2,7 @@ import streamlit as st
 from provider_readiness import readiness
 from historical_provider import preview_keepa
 from historical_evidence import analyse as analyse_historical_evidence, REQUIRED as HISTORICAL_FIELDS
+from keepa_normalizer import normalize as normalize_keepa
 import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
@@ -33,9 +34,9 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.24',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.25',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.24 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.25 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -853,7 +854,7 @@ if page == 'Commercial provider readiness':
 
 if page == 'Commercial provider readiness':
     st.divider()
-    st.subheader('V1.24: Historical evidence quality (offline, read-only)')
+    st.subheader('V1.25: Historical evidence quality (offline, read-only)')
     st.info('Upload documented, authorized observations. This checks 12-month coverage and descriptive price/rank statistics. It does NOT verify provider origin, actual Amazon sales, or sustained demand.')
     st.caption('Keepa raw arrays are NOT automatically converted here. All input values must be documented. UK amounts converted to EUR require an external conversion record.')
     st.code(','.join(HISTORICAL_FIELDS), language='text')
@@ -876,3 +877,29 @@ if page == 'Commercial provider readiness':
                                'v124_evidence_report.json', 'application/json', key='v124_download')
         except (UnicodeError, ValueError, csv.Error) as exc:
             st.error(f'Historical evidence validation failed: {exc}. No database writes.')
+
+if page == 'Commercial provider readiness':
+    st.divider()
+    st.subheader('V1.25: Keepa historical JSON normalizer (offline, read-only)')
+    st.info('Upload one product JSON object exported from a permitted Keepa response. No API calls or database writes. This is not proof of provider origin or sales.')
+    asin_v125 = st.text_input('ASIN for offline normalization', value='B008S8RJKK', key='v125_asin')
+    fx_v125 = st.text_input('Optional documented GBP-to-EUR exchange rate (leave blank for GBP only)', value='', key='v125_fx')
+    upload_v125 = st.file_uploader('Keepa product JSON (max 2 MB)', type=['json'], key='v125_json')
+    if upload_v125 is not None:
+        try:
+            import json
+            raw_v125 = upload_v125.getvalue()
+            if len(raw_v125) > 2_000_000:
+                raise ValueError('JSON exceeds 2 MB')
+            product_v125 = json.loads(raw_v125.decode('utf-8-sig'))
+            if isinstance(product_v125, dict) and isinstance(product_v125.get('products'), list):
+                if len(product_v125['products']) != 1:
+                    raise ValueError('Upload must contain exactly one product')
+                product_v125 = product_v125['products'][0]
+            normalized_v125 = normalize_keepa(product_v125, asin_v125, fx_gbp_to_eur=(fx_v125.strip() or None))
+            st.json({k: v for k, v in normalized_v125.items() if k != 'observations'})
+            st.dataframe(normalized_v125['observations'][:100], use_container_width=True)
+            st.download_button('Download normalized observations JSON', json.dumps(normalized_v125, indent=2),
+                               'v125_normalized_keepa.json', 'application/json', key='v125_download')
+        except (ValueError, UnicodeError, TypeError, json.JSONDecodeError) as exc:
+            st.error(f'Normalization failed: {exc}. No database writes.')
