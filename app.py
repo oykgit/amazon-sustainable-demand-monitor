@@ -1,4 +1,5 @@
 import streamlit as st
+from provider_readiness import readiness
 import pandas as pd
 from engine import evaluate, REQUIRED
 from demand_history import analyse_history
@@ -30,28 +31,70 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.21',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.22',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.21 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V1.22 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
     'Stored observations', 'Data readiness', 'Product catalogue', 'Free data integration', 'Demand intelligence',
     'Profitability scenarios', 'ASIN price tracking', 'ASIN research comparison', 'Evidence quality audit', 'Research watchlist', 'Scheduled review audit', 'Controlled collection preview', 'Controlled Neon ingestion', 'Authorized provider preview', 'Open Library book catalogue', 'General product catalogue', 'UPCitemdb provider preview', 'Competition analysis', 'Method & safeguards'
 ]
-st.markdown('''<style>
-[data-testid="stSidebar"] [role="radiogroup"] label {font-weight: 750 !important; font-size: 1.04rem !important;}
-[data-testid="stSidebar"] [role="radiogroup"] label p {font-weight: 750 !important; font-size: 1.04rem !important;}
-[data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {font-weight: 800 !important;}
-</style>''', unsafe_allow_html=True)
-with st.sidebar:
-    st.header('Navigation')
-    page = st.radio('Choose a workspace', NAVIGATION, label_visibility='collapsed')
-    st.divider()
-    st.subheader('Research settings')
+st.markdown("""<style>
+/* Two independent, distinct horizontal navigation bands. */
+.st-key-primary_navigation [data-testid="stButton"] button {background:#163d65;color:#fff;border:1px solid #27639b;font-weight:750;min-height:3.2rem;white-space:normal;line-height:1.15}
+.st-key-primary_navigation [data-testid="stButton"] button:hover {background:#255e95;color:#fff}
+.st-key-secondary_navigation [data-testid="stButton"] button {background:#165a50;color:#fff;border:1px solid #258979;font-weight:750;min-height:3.2rem;white-space:normal;line-height:1.15}
+.st-key-secondary_navigation [data-testid="stButton"] button:hover {background:#218373;color:#fff}
+</style>""", unsafe_allow_html=True)
+
+# Split into two separately paginated 2-row x 5-column navigation bands.
+PRIMARY_NAV = NAVIGATION[:12]
+SECONDARY_NAV = NAVIGATION[12:] + ['Commercial provider readiness']
+if 'v122_page' not in st.session_state:
+    st.session_state.v122_page = 'Overview'
+if 'v122_primary_index' not in st.session_state:
+    st.session_state.v122_primary_index = 0
+if 'v122_secondary_index' not in st.session_state:
+    st.session_state.v122_secondary_index = 0
+
+def navigation_band(items, label, key, index_key):
+    st.markdown(f'**{label}**')
+    current = st.session_state[index_key]
+    page_count = (len(items) + 9) // 10
+    current = max(0, min(current, page_count - 1))
+    st.session_state[index_key] = current
+    with st.container(key=key):
+        visible = items[current * 10:(current + 1) * 10]
+        for row_start in (0, 5):
+            cols = st.columns(5)
+            for j, item in enumerate(visible[row_start:row_start+5]):
+                with cols[j]:
+                    selected = item == st.session_state.v122_page
+                    if st.button(('● ' if selected else '') + item, key=f'{key}_{item}', use_container_width=True):
+                        st.session_state.v122_page = item
+                        st.rerun()
+    if page_count > 1:
+        a, b, c = st.columns([1, 2, 1])
+        if a.button('◀ Previous', key=key+'_prev', disabled=current == 0):
+            st.session_state[index_key] = current - 1
+            st.rerun()
+        b.caption(f'Navigation set {current+1} of {page_count} · {len(items)} workspaces')
+        if c.button('Next ▶', key=key+'_next', disabled=current >= page_count - 1):
+            st.session_state[index_key] = current + 1
+            st.rerun()
+
+navigation_band(PRIMARY_NAV, 'RESEARCH & ANALYSIS', 'primary_navigation', 'v122_primary_index')
+with st.expander('Research settings (budget and marketplaces)', expanded=False):
     budget = st.slider('Reselling budget (€)', 500, 1000, 750, 50)
     markets = st.multiselect('Market', ['UK', 'IE'], default=['UK', 'IE'])
-    st.caption('Amounts are EUR. UK prices require documented conversion. Data marked verified by an operator is not independently verified.')
+    st.caption('Amounts are EUR. UK prices require documented conversion. Operator-attested evidence is not independently verified.')
+
+st.divider()
+navigation_band(SECONDARY_NAV, 'DATA, PROVIDERS & SAFEGUARDS', 'secondary_navigation', 'v122_secondary_index')
+page = st.session_state.v122_page
+st.caption(f'Current workspace: {page}')
+st.divider()
 
 if page == 'Overview':
     st.subheader('Research overview')
@@ -706,7 +749,7 @@ if page == 'Authorized provider preview':
         st.download_button('Download provider dry-run report', json.dumps(result,indent=2), 'v118_provider_report.json', 'application/json')
 
 if page == 'Open Library book catalogue':
-    st.subheader('V1.21: Open Library catalogue connection fix (books only)')
+    st.subheader('V1.22: Open Library catalogue connection fix (books only)')
     st.info('Open Library can provide book title and publication metadata by ISBN. This is not Amazon pricing, sales history, demand, or an ASIN match.')
     st.caption('One manual HTTPS request when you click Lookup. No automatic scheduling, no Neon writes, no purchases. Respect provider API usage rules.')
     isbn_input = st.text_input('ISBN-10 or ISBN-13', value='9780140328721', key='v119_isbn')
@@ -725,7 +768,7 @@ if page == 'Open Library book catalogue':
         st.download_button('Download catalogue report JSON', json.dumps(st.session_state['v119_result'], indent=2), 'v119_catalogue_preview.json', 'application/json')
 
 if page == 'General product catalogue':
-    st.subheader('V1.21: General product catalogue (read-only)')
+    st.subheader('V1.22: General product catalogue (read-only)')
     st.info('Lookup packaged foods or cosmetics by GTIN/EAN/UPC through a community catalogue. A barcode match does not establish Amazon listing, sales, price or UK/IE demand.')
     st.caption('Manual lookup only. Provider terms and availability apply. Some providers may return HTTP 403 from Render; do not bypass restrictions. No Neon writes or purchases.')
     catalogue_provider = st.selectbox('Public catalogue provider', list(GENERAL_PROVIDERS), key='v120_provider')
@@ -745,7 +788,7 @@ if page == 'General product catalogue':
         st.download_button('Download product catalogue report JSON', json.dumps(st.session_state['v120_result'], indent=2), 'v120_general_catalogue.json', 'application/json')
 
 if page == 'UPCitemdb provider preview':
-    st.subheader('V1.21: UPCitemdb free-trial provider (read-only)')
+    st.subheader('V1.22: UPCitemdb free-trial provider (read-only)')
     st.info('Single barcode lookup, initiated by you. No Neon writes, purchases, or Amazon demand claims. The free provider may limit requests from shared Render IPs.')
     st.caption('The free API has published daily and burst limits. On HTTP 429 or 403 this session pauses further requests. No automatic retries.')
     upc_code = st.text_input('EAN / UPC / GTIN', value='3017620422003', key='v121_barcode')
@@ -798,3 +841,10 @@ if page == 'Competition analysis':
             st.error(f'Invalid competition data: {exc}')
     else:
         st.info('No competition observations uploaded. No competition assessments available.')
+
+if page == 'Commercial provider readiness':
+    st.subheader('V1.22: Commercial provider readiness (offline, read-only)')
+    st.info('This checks configuration only. No Keepa or DataForSEO requests are sent, and no credentials are displayed.')
+    provider = st.selectbox('Commercial research provider', ['Keepa', 'DataForSEO'], key='v122_provider')
+    st.json(readiness(provider))
+    st.warning('Historical Amazon price/rank data is not connected. Do not interpret configuration readiness as verified demand, product profitability or provider authorization.')
