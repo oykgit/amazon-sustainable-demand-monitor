@@ -34,6 +34,7 @@ from openlibrary_catalogue import preview as preview_openlibrary
 from general_catalogue import preview as preview_general_catalogue, PROVIDERS as GENERAL_PROVIDERS
 from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFailure
 from interest_store import save_interest, load_interest, validate_interest
+from consolidated_assessment import consolidate
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
@@ -592,6 +593,40 @@ if page == 'ASIN research comparison':
         st.download_button('Export research comparison CSV',df.to_csv(index=False),'asin_research_comparison_v112.csv','text/csv')
         st.info('A higher score means more favourable operator-entered economics and/or more observations under this simple rubric. It is not a demand estimate, validation of Amazon prices, or permission to buy.')
     else: st.info('Click Compare saved ASIN price snapshots to load data from Neon.')
+
+if page == 'ASIN research comparison':
+    st.divider()
+    st.subheader('V2.0: Consolidated product assessment (read-only)')
+    st.caption('Combine existing ASIN comparisons, product identities and explicitly associated Google Trends keywords. A keyword is not automatically linked to an ASIN. No Amazon sales are verified.')
+    if st.button('Load consolidated research from Neon', key='v2_consolidate_load'):
+        try:
+            snapshot_rows = load_snapshots(limit=10000)
+            identity_rows = load_asin_observations(limit=10000)
+            interest_rows = load_interest(limit=10000)
+            st.session_state['v2_consolidate_inputs'] = (compare_snapshots(snapshot_rows), identity_rows, interest_rows)
+        except Exception as exc:
+            st.error(f'Could not load consolidated evidence: {exc}')
+    if 'v2_consolidate_inputs' in st.session_state:
+        comparison_rows, identity_rows, interest_rows = st.session_state['v2_consolidate_inputs']
+        if not comparison_rows:
+            st.info('No saved ASIN price snapshots available for comparison.')
+        else:
+            available = sorted({(str(r['market']).upper(), str(r['keyword']).strip()) for r in interest_rows.to_dict('records')})
+            associations = {}
+            for item in comparison_rows:
+                asin_market = (str(item['ASIN']).upper(), str(item['Marketplace']).upper())
+                options = ['No keyword linked'] + [keyword for market, keyword in available if market == asin_market[1]]
+                chosen = st.selectbox(f"Optional search keyword for {asin_market[0]} ({asin_market[1]})", options,
+                                      key=f'v2_keyword_{asin_market[0]}_{asin_market[1]}')
+                if chosen != 'No keyword linked':
+                    associations[asin_market] = chosen
+            report = consolidate(comparison_rows, identity_rows, interest_rows, associations)
+            st.dataframe(pd.DataFrame(report), use_container_width=True, hide_index=True)
+            st.download_button('Export consolidated product assessment CSV',
+                               pd.DataFrame(report).to_csv(index=False),
+                               'v2_consolidated_product_assessment.csv', 'text/csv',
+                               key='v2_consolidate_export')
+            st.warning('These are operator-entered price estimates and Google web-search signals, not verified Amazon prices, unit sales, resale eligibility or purchasing recommendations. No database writes occur.')
 
 if page == 'Evidence quality audit':
     st.subheader('V1.19: ASIN evidence quality and freshness audit')
