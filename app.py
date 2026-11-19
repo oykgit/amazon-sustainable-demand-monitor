@@ -37,6 +37,7 @@ from interest_store import save_interest, load_interest, validate_interest
 from consolidated_assessment import consolidate
 from brevo_reporting import configuration_status, send_report
 from dashboard_commercial import load_dashboard, display_rows
+from neon_readiness import read_interest_summary
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
@@ -130,7 +131,7 @@ if page == 'Overview':
     else:
         st.warning('Email settings missing: ' + ', '.join(k for k,v in email_status.items() if not v))
 
-    st.subheader('Research overview')
+    st.subheader('Research overview — repository CSV data')
     st.info('Research-only dashboard. No verified Amazon unit sales, product buy recommendations, or purchasing integration.')
     overview, details = inspect_stored()
     monthly_path = Path('data/monthly.csv')
@@ -143,11 +144,24 @@ if page == 'Overview':
         except Exception:
             st.warning('Monthly data could not be read; use Data readiness for details.')
     a,b,c = st.columns(3)
-    a.metric('Products with stored research', product_count)
+    a.metric('Products in repository monthly CSV', product_count)
     b.metric('Research budget', f'€{budget:,}')
     c.metric('Verified Amazon sales feed', 'Not connected')
-    st.write('**Stored data readiness**')
+    st.write('**Repository CSV data readiness (not Neon)**')
     st.dataframe(overview, use_container_width=True, hide_index=True)
+    st.caption('Zero rows above means the deployment has no repository CSV observations; it does not mean Neon has no records.')
+    if database_configured():
+        st.write('**Neon search-interest readiness (separate persistent storage)**')
+        try:
+            interest_info = read_interest_summary()
+            st.metric('Neon search-interest observations', interest_info['rows'])
+            st.metric('Neon search-interest keywords', interest_info['keywords'])
+            if interest_info['rows']:
+                st.dataframe(pd.DataFrame(interest_info['series']), hide_index=True, use_container_width=True)
+            else:
+                st.info('No stored Neon search-interest observations were found.')
+        except Exception:
+            st.warning('Neon search-interest status could not be read. No database changes were made.')
     st.caption('Use the horizontal navigation to open a research workspace. All profitability and competition results are scenario assessments, not verified investment opportunities.')
 
 def download_template(label,fields,filename,example):
