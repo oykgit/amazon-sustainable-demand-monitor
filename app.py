@@ -36,6 +36,7 @@ from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFai
 from interest_store import save_interest, load_interest, validate_interest
 from consolidated_assessment import consolidate
 from brevo_reporting import configuration_status, send_report
+from dashboard_commercial import load_dashboard, display_rows
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
@@ -94,6 +95,24 @@ st.caption(f'Current workspace: {page}')
 st.divider()
 
 if page == 'Overview':
+    st.subheader('Automated commercial assessment — latest Neon evidence')
+    st.caption('Automatically loads stored evidence when Overview opens. No CSV upload, manual price entry, provider call, or database write. This is not a verified Amazon opportunity feed.')
+    if database_configured():
+        try:
+            commercial_report = load_dashboard()
+            st.metric('Products assessed from Neon', commercial_report['products_assessed'])
+            st.metric('Verified purchasing opportunities', commercial_report['verified_commercial_opportunities'])
+            commercial_rows = display_rows(commercial_report)
+            if commercial_rows:
+                st.dataframe(pd.DataFrame(commercial_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info('No products are stored in Neon yet.')
+            st.warning('All profit figures are operator-entered scenarios. Amazon sales, live fees, supplier costs and 12-month demand remain unverified. No buying recommendation is issued.')
+        except Exception:
+            st.error('Could not load the Neon commercial assessment. Check database connectivity and Render logs; no data was changed.')
+    else:
+        st.info('DATABASE_URL is not configured in this deployment.')
+
     st.subheader('V2.0: Email delivery verification')
     st.caption('One-time test only; scheduled sending and automatic product research are not yet enabled.')
     email_status = configuration_status()
