@@ -169,7 +169,7 @@ if page == 'External search interest':
                 st.caption('This upload is not saved until you explicitly select the Neon save button below.')
                 if st.button('Save validated search-interest observations to Neon', key='v2_save_interest'):
                     try:
-                        checked = validate_interest(pd.read_csv(file)) if file else None
+                        checked = validate_interest(pd.read_csv(io.BytesIO(file.getvalue()))) if file else None
                         if checked is None:
                             st.warning('Upload a CSV before saving. Repository data is not saved automatically.')
                         else:
