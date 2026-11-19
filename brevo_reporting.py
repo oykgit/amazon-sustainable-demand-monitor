@@ -1,6 +1,7 @@
 """Brevo transactional email, no data collection or purchases."""
 import json
 import os
+import re
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -35,6 +36,21 @@ def send_report(subject, body, env=None, opener=None):
             result = json.loads(response.read().decode("utf-8"))
             return {"accepted": True, "message_id": result.get("messageId", "")}
     except HTTPError as exc:
-        raise RuntimeError(f"Brevo rejected the email (HTTP {exc.code}); check sender and Brevo logs.") from None
+        # Brevo error bodies can contain sensitive details. Only expose a short,
+        # restricted error code; never display the raw response or credentials.
+        error_code = "unavailable"
+        try:
+            raw = exc.read(8192)
+            parsed = json.loads(raw.decode("utf-8", errors="replace"))
+            candidate = parsed.get("code", "") if isinstance(parsed, dict) else ""
+            if isinstance(candidate, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", candidate):
+                error_code = candidate
+        except (ValueError, UnicodeError, OSError, AttributeError):
+            pass
+        raise RuntimeError(
+            f"Brevo API request rejected: HTTP {exc.code}; error code: {error_code}. "
+            "No email was confirmed sent. Check API key permissions/account access "
+            "or contact Brevo support with this status and code."
+        ) from None
     except URLError:
         raise RuntimeError("Email service unavailable; delivery not confirmed.") from None
