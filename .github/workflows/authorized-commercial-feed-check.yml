@@ -1,0 +1,48 @@
+name: Authorized commercial feed check (read-only)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 8 * * *'
+permissions:
+  contents: read
+jobs:
+  feed-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AUTHORIZED_FEED_URL: ${{ secrets.AUTHORIZED_FEED_URL }}
+      AUTHORIZED_FEED_HOST: ${{ vars.AUTHORIZED_FEED_HOST }}
+      AUTHORIZED_FEED_PROVIDER: ${{ vars.AUTHORIZED_FEED_PROVIDER }}
+      AUTHORIZED_FEED_PERMISSION_REF: ${{ vars.AUTHORIZED_FEED_PERMISSION_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate authorized commercial feed (no writes)
+        run: python authorized_provider.py --output authorized_feed_report.json
+      - name: Publish status to workflow summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('authorized_feed_report.json')
+          if p.exists():
+              d=json.loads(p.read_text())
+              status=d.get('status','UNKNOWN')
+              seen=d.get('records_seen',0)
+              accepted=d.get('accepted',0)
+              rejected=d.get('rejected',0)
+              message=f'### Authorized feed check\nStatus: **{status}**\n\nRecords: {seen}; accepted for preview: {accepted}; rejected: {rejected}.\n\nNo database writes or purchases. Provider authorization is operator-declared, not independently verified. No Amazon sales verification.\n'
+          else:
+              message='### Authorized feed check\nNo report was generated. Review job logs.\n'
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f: f.write(message)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: authorized-commercial-feed-diagnostic
+          path: authorized_feed_report.json
+          if-no-files-found: ignore
+          retention-days: 7
