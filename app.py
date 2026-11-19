@@ -35,6 +35,7 @@ from general_catalogue import preview as preview_general_catalogue, PROVIDERS as
 from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFailure
 from interest_store import save_interest, load_interest, validate_interest
 from consolidated_assessment import consolidate
+from brevo_reporting import configuration_status, send_report
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
@@ -93,6 +94,23 @@ st.caption(f'Current workspace: {page}')
 st.divider()
 
 if page == 'Overview':
+    st.subheader('V2.0: Email delivery verification')
+    st.caption('One-time test only; scheduled sending and automatic product research are not yet enabled.')
+    email_status = configuration_status()
+    if all(email_status.values()):
+        st.success('Brevo environment variables are present (authentication not yet tested).')
+        if st.button('Send one Brevo test email', key='brevo_send_test'):
+            try:
+                result = send_report('Smart Product Monitor: email delivery test',
+                    'This is a one-time email delivery test from Amazon Sustainable Demand Monitor. '
+                    'Scheduled research reports and automatic product discovery are not yet enabled.')
+                st.success('Brevo accepted the email request. Check Gmail and Brevo logs for delivery.')
+                st.write('Brevo message ID:', result['message_id'] or '(not returned)')
+            except (ValueError, RuntimeError) as exc:
+                st.error(str(exc))
+    else:
+        st.warning('Email settings missing: ' + ', '.join(k for k,v in email_status.items() if not v))
+
     st.subheader('Research overview')
     st.info('Research-only dashboard. No verified Amazon unit sales, product buy recommendations, or purchasing integration.')
     overview, details = inspect_stored()
