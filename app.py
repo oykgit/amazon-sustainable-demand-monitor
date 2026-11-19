@@ -32,12 +32,13 @@ from authorized_provider import collect as preview_authorized_provider
 from openlibrary_catalogue import preview as preview_openlibrary
 from general_catalogue import preview as preview_general_catalogue, PROVIDERS as GENERAL_PROVIDERS
 from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFailure
+from interest_store import save_interest, load_interest, validate_interest
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
                           import_search_interest,search_interest_summary)
 
-st.set_page_config(page_title='Amazon Sustainable Demand Monitor V1.26',page_icon='📦',layout='wide')
+st.set_page_config(page_title='Amazon Sustainable Demand Monitor V2.0 repair',page_icon='📦',layout='wide')
 st.title('📦 Amazon Sustainable Demand Monitor')
-st.caption('V1.26 • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
+st.caption('V2.0 repair • demand intelligence & profitability scenarios • UK & Ireland • No orders or purchases')
 st.warning('No live Amazon API. Free catalogue lookups do not establish Amazon sales or prices. Scheduled collection runs only when you configure an authorised CSV feed in GitHub Actions. Amazon sales volumes are NOT known. No purchase recommendations from rankings or search interest alone.')
 NAVIGATION = [
     'Overview', '12-month research', 'Amazon rank snapshots', 'External search interest',
@@ -165,6 +166,18 @@ if page == 'External search interest':
             if not summary.empty:
                 st.dataframe(summary[summary.market.isin(markets)],use_container_width=True,hide_index=True)
                 st.download_button('Export search interest',summary.to_csv(index=False),'search_interest_research.csv','text/csv')
+                st.caption('This upload is not saved until you explicitly select the Neon save button below.')
+                if st.button('Save validated search-interest observations to Neon', key='v2_save_interest'):
+                    try:
+                        checked = validate_interest(pd.read_csv(file)) if file else None
+                        if checked is None:
+                            st.warning('Upload a CSV before saving. Repository data is not saved automatically.')
+                        else:
+                            result = save_interest(checked)
+                            st.success(f"Neon: {result['inserted']} new rows; {result['existing_not_overwritten']} already present (not overwritten).")
+                    except Exception as exc:
+                        st.error(f'Neon save failed: {exc}')
+
             else:st.info('No valid search-interest observations.')
         except Exception as exc:st.error(f'Invalid interest file: {exc}')
 if page == 'Stored observations':
@@ -184,7 +197,21 @@ if page == 'Data readiness':
     st.subheader('Data readiness and coverage audit')
     st.write('This page verifies what is actually stored. It does not retrieve Amazon sales or claim a feed is configured.')
     overview,details=inspect_stored()
+    try:
+        stored_interest = load_interest()
+        interest_count = len(stored_interest)
+        overview.loc[overview.source.eq('interest'), 'rows'] = interest_count
+        overview.loc[overview.source.eq('interest'), 'status'] = ('NEON STORED / SEARCH INTEREST ONLY' if interest_count else 'NOT CONFIGURED / NO DATA')
+        if interest_count:
+            overview.loc[overview.source.eq('interest'), 'last_observation'] = stored_interest.month.max()
+            overview.loc[overview.source.eq('interest'), 'days_since_latest'] = None
+    except Exception as exc:
+        st.warning(f'Neon search-interest check unavailable: {exc}')
     st.dataframe(overview,use_container_width=True,hide_index=True)
+    if 'stored_interest' in locals() and not stored_interest.empty:
+        st.caption('These are documented Google search-interest records, not Amazon sales or verified demand.')
+        st.dataframe(search_interest_summary(stored_interest),use_container_width=True,hide_index=True)
+        st.download_button('Export stored search interest from Neon',stored_interest.to_csv(index=False),'neon_search_interest.csv','text/csv')
     if 'monthly' in details and 'coverage' in details['monthly']:
         st.write('**12-month coverage by product and marketplace**')
         coverage=details['monthly']['coverage']
