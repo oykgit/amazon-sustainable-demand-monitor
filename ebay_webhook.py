@@ -1,29 +1,34 @@
-"""eBay account-deletion webhook, phase 2 staging (fail closed).
+"""eBay account deletion webhook: Phase 2D, authentication integrated, fail closed.
 
-GET challenge remains operational. POST refuses to acknowledge until the
-production signing-key integration and data-erasure inventory are approved.
+GET challenge supported. POST can validate authentic eBay signatures but always
+returns 503 until durable processing and erasure safeguards are implemented.
+Never logs raw notifications or personal identifiers.
 """
-import base64
-import hashlib
 import json
+import base64
+import binascii
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from ebay_signature import SignatureError, decode_header, verify_notification
+from ebay_public_keys import EbayKeyError, EbayPublicKeyClient
+
 PATH = '/ebay/account-deletion'
 MAX_BODY = 65536
+KEY_CLIENT = EbayPublicKeyClient()
 
 
 def challenge_response(challenge, token, endpoint):
+    import hashlib
     if not challenge or not token or not endpoint:
         raise ValueError('missing challenge configuration')
-    if not (32 <= len(token) <= 80) or any(not (c.isascii() and c.isalnum() or c in '_-') for c in token):
+    if not (32 <= len(token) <= 80) or any(not (c.isascii() and (c.isalnum() or c in '_-')) for c in token):
         raise ValueError('invalid verification token')
     return hashlib.sha256((challenge + token + endpoint).encode('utf-8')).hexdigest()
 
 
 def parse_notification(body):
-    """Validate structural shape only. NEVER interpret this as authentication."""
     if not isinstance(body, bytes) or not body or len(body) > MAX_BODY:
         raise ValueError('invalid body size')
     try:
@@ -32,31 +37,41 @@ def parse_notification(body):
         raise ValueError('invalid json') from exc
     if not isinstance(obj, dict):
         raise ValueError('invalid root')
-    meta = obj.get('metadata')
-    note = obj.get('notification')
+    meta, note = obj.get('metadata'), obj.get('notification')
     if not isinstance(meta, dict) or meta.get('topic') != 'MARKETPLACE_ACCOUNT_DELETION':
         raise ValueError('invalid topic')
     if not isinstance(note, dict) or not isinstance(note.get('notificationId'), str) or not note['notificationId']:
         raise ValueError('invalid notification id')
     data = note.get('data')
-    if not isinstance(data, dict) or not any(isinstance(data.get(k), str) and data[k] for k in ('userId','username','eiasToken')):
+    if not isinstance(data, dict) or not any(isinstance(data.get(k), str) and data[k] for k in ('userId', 'username', 'eiasToken')):
         raise ValueError('missing user identifier')
     return obj
 
 
 def decode_signature_envelope(header):
-    """Parse the base64 JSON envelope. This is NOT signature verification."""
-    if not isinstance(header, str) or len(header) > 4096:
+    """Legacy structural parser for Phase 2 staging tests; NOT authentication."""
+    if not isinstance(header, str) or not header or len(header) > 4096:
         raise ValueError('invalid signature header')
     try:
-        envelope = json.loads(base64.b64decode(header, validate=True))
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        obj = json.loads(base64.b64decode(header, validate=True))
+    except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
         raise ValueError('malformed signature header') from exc
-    if not isinstance(envelope, dict) or not isinstance(envelope.get('kid'), str) or not envelope['kid']:
-        raise ValueError('missing signing key id')
-    if not isinstance(envelope.get('signature'), str) or not envelope['signature']:
-        raise ValueError('missing signature')
-    return envelope
+    if not isinstance(obj, dict) or not isinstance(obj.get('kid'), str) or not obj['kid'] or not isinstance(obj.get('signature'), str) or not obj['signature']:
+        raise ValueError('invalid signature envelope')
+    return obj
+
+
+def authenticate_notification(signature_header, raw_body, key_client=None):
+    """Validate signature using a trusted eBay key; returns parsed event.
+
+    Does NOT authorize acknowledgement, deletion, or database writes.
+    """
+    kid, _ = decode_header(signature_header)
+    trusted_pem = (key_client or KEY_CLIENT).get_public_key(kid)
+    verified_kid = verify_notification(signature_header, raw_body, trusted_pem)
+    if verified_kid != kid:
+        raise SignatureError('signing key mismatch')
+    return parse_notification(raw_body)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -72,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlsplit(self.path)
         if parsed.path == '/health':
-            return self.reply(200, {'status': 'phase2_staging', 'post_enabled': False})
+            return self.reply(200, {'status': 'phase2d_authentication_integrated', 'post_enabled': False})
         if parsed.path != PATH:
             return self.reply(404, {'error': 'not_found'})
         challenge = parse_qs(parsed.query).get('challenge_code', [''])[0]
@@ -91,10 +106,27 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if urlsplit(self.path).path != PATH:
             return self.reply(404, {'error': 'not_found'})
-        # IMPORTANT: Do not acknowledge any notification before authentication,
-        # durable receipt and a verified erasure process are implemented.
-        # Do not log or persist the raw request: it may contain personal data.
-        return self.reply(503, {'error': 'production_notification_processing_not_enabled'})
+        # Default disabled: do not accept or acknowledge live notifications.
+        if os.getenv('EBAY_PHASE2D_AUTH_TEST', '') != '1':
+            return self.reply(503, {'error': 'notification_processing_not_enabled'})
+        # Diagnostic mode only; no storage and never a 2xx acknowledgement.
+        try:
+            length_text = self.headers.get('Content-Length', '')
+            if not length_text.isdecimal():
+                return self.reply(400, {'error': 'invalid_content_length'})
+            length = int(length_text)
+            if length < 1 or length > MAX_BODY:
+                return self.reply(413, {'error': 'invalid_body_size'})
+            body = self.rfile.read(length)
+            if len(body) != length:
+                return self.reply(400, {'error': 'incomplete_body'})
+            authenticate_notification(self.headers.get('X-EBAY-SIGNATURE', ''), body)
+        except (SignatureError, ValueError):
+            return self.reply(401, {'error': 'invalid_notification'})
+        except EbayKeyError:
+            return self.reply(503, {'error': 'key_lookup_unavailable'})
+        # Never acknowledge until Phase 2E has durable receipt + erasure.
+        return self.reply(503, {'error': 'verified_but_processing_not_enabled'})
 
 
 if __name__ == '__main__':
