@@ -1,0 +1,54 @@
+
+name: Phase 2R PostgreSQL Integration Tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      EBAY_LOCAL_PG_TEST: "1"
+      DATABASE_URL: ""
+      EBAY_CLIENT_ID: ""
+      EBAY_CLIENT_SECRET: ""
+      EBAY_PHASE2D_AUTH_TEST: "0"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ebay_test
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: ebay_phase2r_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ebay_test -d ebay_phase2r_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest psycopg2-binary
+
+      - name: Run isolated PostgreSQL tests
+        run: |
+          python -m pytest -v tests/test_ebay_phase2r_postgres.py
