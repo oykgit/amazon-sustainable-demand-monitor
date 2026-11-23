@@ -1,0 +1,64 @@
+
+name: Phase 2Q eBay Test Coverage Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DATABASE_URL: ""
+      EBAY_CLIENT_ID: ""
+      EBAY_CLIENT_SECRET: ""
+      EBAY_NOTIFICATION_ENDPOINT: ""
+      EBAY_VERIFICATION_TOKEN: ""
+      EBAY_PHASE2D_AUTH_TEST: "0"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest pytest-cov
+
+      - name: Collect eBay test cases
+        run: |
+          python -m pytest --collect-only -q tests/test_ebay*.py
+
+      - name: Run coverage audit
+        run: |
+          python -m pytest -q tests/test_ebay*.py \
+            --cov=ebay_signature \
+            --cov=ebay_public_keys \
+            --cov=ebay_notification_ledger \
+            --cov=ebay_phase2h \
+            --cov=ebay_phase2i \
+            --cov=ebay_phase2k \
+            --cov=ebay_phase2l \
+            --cov=ebay_phase2m \
+            --cov=ebay_phase2n \
+            --cov=ebay_webhook \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebay-phase2q-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
