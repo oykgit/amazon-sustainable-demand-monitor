@@ -51,4 +51,4 @@ jobs:
 
       - name: Run isolated PostgreSQL tests
         run: |
-          python -m pytest -v tests/test_ebay_phase2r_postgres.py
+          python -m pytest -v tests/test_ebay_phase2r_postgres.py tests/test_ebay_phase2r_concurrency.py
