@@ -1,8 +1,4 @@
-"""Phase 2F durable eBay notification ledger (staging only).
-
-Stores no eBay user identifiers, raw payloads, or notification bodies.
-No webhook acknowledgements or erasure actions are enabled by this module.
-"""
+"""Offline durable notification ledger; no HTTP acknowledgment authorization."""
 import hashlib
 import re
 
@@ -21,12 +17,7 @@ def notification_fingerprint(notification_id):
 
 
 def record_verified_notification(connection, notification_id):
-    """Record an already authenticated notification, idempotently.
-
-    Caller MUST cryptographically verify signature before invoking this.
-    Requires preinstalled SQL schema. Commits on success, rolls back on error.
-    Returns True if newly recorded, False if duplicate.
-    """
+    """Record an already authenticated notification, idempotently."""
     digest = notification_fingerprint(notification_id)
     try:
         with connection.cursor() as cur:
@@ -39,12 +30,19 @@ def record_verified_notification(connection, notification_id):
         connection.commit()
         return inserted
     except Exception as exc:
-        connection.rollback()
+        try:
+            connection.rollback()
+        except Exception:
+            try:
+                connection.close()
+            except Exception:
+                pass
+            raise LedgerError('could not durably record notification; rollback failed; discard connection and reconcile durable state') from exc
         raise LedgerError('could not durably record notification') from exc
 
 
 def read_notification_status(connection, notification_id):
-    """Read only, for internal testing; does not authorize a 2xx response."""
+    """Read only; does not authorize a 2xx response."""
     digest = notification_fingerprint(notification_id)
     with connection.cursor() as cur:
         cur.execute('''SELECT status FROM public.ebay_notification_ledger
