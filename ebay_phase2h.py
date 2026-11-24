@@ -4,6 +4,8 @@
 Offline and staging use only.
 
 No live HTTP acknowledgments or production erasure authorization.
+
+Preserves SQL compatibility with earlier regression tests.
 """
 
 from dataclasses import dataclass
@@ -111,7 +113,7 @@ def process_verified_deletion(
             cur.execute(
                 """
                 UPDATE public.ebay_notification_ledger
-                SET status = 'processing',
+                SET status='processing',
                     updated_at = now()
                 WHERE notification_fingerprint = %s
                 """,
@@ -135,7 +137,7 @@ def process_verified_deletion(
             cur.execute(
                 """
                 UPDATE public.ebay_notification_ledger
-                SET status = 'completed',
+                SET status='completed',
                     updated_at = now()
                 WHERE notification_fingerprint = %s
                 """,
