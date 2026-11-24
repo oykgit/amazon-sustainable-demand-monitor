@@ -1,4 +1,3 @@
-
 """Phase 2R.6: Multi-table consistency and connection-loss recovery.
 
 Disposable PostgreSQL only.
@@ -283,36 +282,40 @@ def test_retry_after_partial_failure(environment):
 
 def interrupt_transaction(db, admin, notification_id):
     backend_pid = db.get_backend_pid()
+    evidence = {}
 
     def interrupted_handler(cur, event_id):
-        deleted = delete_from_table(
+        evidence["deleted"] = delete_from_table(
             cur, TABLES[0], "account-A"
         )
-        assert deleted == 2
-
-        # Terminate only the disposable test worker.
-        # Wait for PostgreSQL to confirm termination.
         with admin.cursor() as control:
             control.execute(
                 "SELECT pg_terminate_backend(%s, %s)",
                 (backend_pid, 5000),
             )
-            assert control.fetchone()[0] is True
+            evidence["terminated"] = control.fetchone()[0]
+        try:
+            cur.execute("SELECT 1")
+        except psycopg2.Error as exc:
+            evidence["database_error"] = exc
+            raise
+        return evidence["deleted"]
 
-        # This operation must fail because the
-        # original database connection is gone.
-        cur.execute("SELECT 1")
+    with pytest.raises(DeletionProcessingError) as error:
+        process(db, notification_id, interrupted_handler)
 
-        return deleted
-
-    with pytest.raises(
-        (DeletionProcessingError, psycopg2.Error)
-    ):
-        process(
-            db,
-            notification_id,
-            interrupted_handler,
+    # Assertions outside the wrapped callback cannot be swallowed.
+    assert evidence.get("deleted") == 2
+    assert evidence.get("terminated") is True
+    assert isinstance(evidence.get("database_error"), psycopg2.Error)
+    assert error.value.__cause__ is evidence["database_error"]
+    assert db.closed != 0
+    with admin.cursor() as control:
+        control.execute(
+            "SELECT count(*) FROM pg_stat_activity WHERE pid = %s",
+            (backend_pid,),
         )
+        assert control.fetchone()[0] == 0
 
 
 def test_connection_loss_rolls_back_deletion(environment):
