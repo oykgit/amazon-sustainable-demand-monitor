@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 15
 
     env:
+      EBAY_LOCAL_PG_TEST: "0"
       DATABASE_URL: ""
       EBAY_CLIENT_ID: ""
       EBAY_CLIENT_SECRET: ""
@@ -33,7 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pytest pytest-cov
+          python -m pip install pytest pytest-cov psycopg2-binary
 
       - name: Configure subprocess coverage
         run: |
