@@ -1,14 +1,17 @@
-"""Phase 2H: fail-closed, transactional deletion workflow engine.
 
-Staging only. Never call this from a live webhook until the storage inventory,
-verified eBay identity mapping, and live database tests are complete.
+"""Phase 2R.8: Hardened transactional deletion workflow engine.
+
+Offline and staging use only.
+
+No live HTTP acknowledgments or production erasure authorization.
 """
+
 from dataclasses import dataclass
 from typing import Callable
 
 
 class DeletionProcessingError(RuntimeError):
-    pass
+    """Deletion processing could not safely complete."""
 
 
 @dataclass(frozen=True)
@@ -19,48 +22,147 @@ class DeletionOutcome:
     acknowledged: bool = False
 
 
-def process_verified_deletion(connection, notification_id: str,
-                              inspect_and_erase: Callable, *,
-                              storage_inventory_approved: bool = False) -> DeletionOutcome:
-    """Process verified notification in one transaction with an approved handler.
+def _rollback_safely(connection):
+    """Attempt rollback without masking the original failure.
 
-    `inspect_and_erase(cur, notification_id)` must identify all matching user
-    data across approved stores and erase it in this same transaction. Return
-    nonnegative number of records erased. It must raise if any storage location
-    is unreviewed or any erasure cannot be completed. No HTTP success here.
-
-    The caller MUST have verified the eBay signature and extracted the ID from
-    the authenticated payload. `storage_inventory_approved` is an explicit
-    operator approval, never inferred from a zero-count query.
+    A failed rollback means the connection must not be reused.
     """
+    try:
+        connection.rollback()
+        return True
+
+    except Exception:
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+        return False
+
+
+def process_verified_deletion(
+    connection,
+    notification_id: str,
+    inspect_and_erase: Callable,
+    *,
+    storage_inventory_approved: bool = False,
+) -> DeletionOutcome:
+    """Process an authenticated, durably staged notification.
+
+    The caller must authenticate the notification before calling.
+
+    The erasure handler must use the supplied transaction and
+    must not commit independently.
+
+    No result from this function authorizes HTTP acknowledgment.
+    """
+
     from ebay_notification_ledger import notification_fingerprint
+
     digest = notification_fingerprint(notification_id)
-    if not storage_inventory_approved or not callable(inspect_and_erase):
-        raise DeletionProcessingError('approved full storage inventory and erasure handler required')
+
+    if (
+        not storage_inventory_approved
+        or not callable(inspect_and_erase)
+    ):
+        raise DeletionProcessingError(
+            "approved full storage inventory "
+            "and erasure handler required"
+        )
+
     try:
         with connection.cursor() as cur:
-            # Serialize competing handlers on the same notification row.
-            cur.execute('''SELECT status FROM public.ebay_notification_ledger
-                           WHERE notification_fingerprint = %s FOR UPDATE''', (digest,))
+
+            cur.execute(
+                """
+                SELECT status
+                FROM public.ebay_notification_ledger
+                WHERE notification_fingerprint = %s
+                FOR UPDATE
+                """,
+                (digest,),
+            )
+
             row = cur.fetchone()
+
             if row is None:
-                raise DeletionProcessingError('notification must be durably staged first')
-            if row[0] == 'completed':
+                raise DeletionProcessingError(
+                    "notification must be durably staged first"
+                )
+
+            if row[0] == "completed":
                 connection.commit()
-                return DeletionOutcome(digest, 'completed', 0)
-            if row[0] not in ('received', 'failed', 'processing'):
-                raise DeletionProcessingError('unknown notification state')
-            cur.execute('''UPDATE public.ebay_notification_ledger
-                           SET status='processing', updated_at=now()
-                           WHERE notification_fingerprint=%s''', (digest,))
-            erased = inspect_and_erase(cur, notification_id)
-            if isinstance(erased, bool) or not isinstance(erased, int) or erased < 0:
-                raise DeletionProcessingError('erasure handler returned invalid result')
-            cur.execute('''UPDATE public.ebay_notification_ledger
-                           SET status='completed', updated_at=now()
-                           WHERE notification_fingerprint=%s''', (digest,))
+
+                return DeletionOutcome(
+                    digest,
+                    "completed",
+                    0,
+                )
+
+            if row[0] not in (
+                "received",
+                "failed",
+                "processing",
+            ):
+                raise DeletionProcessingError(
+                    "unknown notification state"
+                )
+
+            cur.execute(
+                """
+                UPDATE public.ebay_notification_ledger
+                SET status = 'processing',
+                    updated_at = now()
+                WHERE notification_fingerprint = %s
+                """,
+                (digest,),
+            )
+
+            erased = inspect_and_erase(
+                cur,
+                notification_id,
+            )
+
+            if (
+                isinstance(erased, bool)
+                or not isinstance(erased, int)
+                or erased < 0
+            ):
+                raise DeletionProcessingError(
+                    "erasure handler returned invalid result"
+                )
+
+            cur.execute(
+                """
+                UPDATE public.ebay_notification_ledger
+                SET status = 'completed',
+                    updated_at = now()
+                WHERE notification_fingerprint = %s
+                """,
+                (digest,),
+            )
+
         connection.commit()
-        return DeletionOutcome(digest, 'completed', erased)
+
+        return DeletionOutcome(
+            digest,
+            "completed",
+            erased,
+        )
+
     except Exception as exc:
-        connection.rollback()
-        raise DeletionProcessingError('deletion transaction did not complete') from exc
+
+        rollback_succeeded = _rollback_safely(
+            connection
+        )
+
+        if not rollback_succeeded:
+            raise DeletionProcessingError(
+                "deletion transaction did not complete; "
+                "rollback failed; discard connection "
+                "and reconcile durable state"
+            ) from exc
+
+        raise DeletionProcessingError(
+            "deletion transaction did not complete"
+        ) from exc
