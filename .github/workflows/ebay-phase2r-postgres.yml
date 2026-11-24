@@ -56,4 +56,5 @@ jobs:
             tests/test_ebay_phase2r_concurrency.py \
             tests/test_ebay_phase2r_erasure.py \
             tests/test_ebay_phase2r_multistore.py \
-            tests/test_ebay_phase2r_e2e.py
+            tests/test_ebay_phase2r_e2e.py \
+            tests/test_ebay_phase2r_hardening.py
