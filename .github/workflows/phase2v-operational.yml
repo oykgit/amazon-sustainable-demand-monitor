@@ -1,0 +1,45 @@
+name: Phase 2V Operational Verification
+on:
+  workflow_dispatch:
+    inputs:
+      hosted:
+        description: Check hosted webhook health (GET only)
+        type: boolean
+        default: false
+      mail:
+        description: Send one synthetic email to configured recipient
+        type: boolean
+        default: false
+      database:
+        description: Inspect configured restricted Neon roles (metadata only)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m pytest -v tests/test_phase2v.py
+      - name: Operational checks
+        env:
+          HOSTED: ${{ inputs.hosted }}
+          MAIL: ${{ inputs.mail }}
+          DB: ${{ inputs.database }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+          REPORT_RECIPIENT_EMAIL: ${{ secrets.REPORT_RECIPIENT_EMAIL }}
+          DATABASE_READER_URL: ${{ secrets.DATABASE_READER_URL }}
+          DATABASE_INGESTION_URL: ${{ secrets.DATABASE_INGESTION_URL }}
+        run: |
+          args=()
+          if [ "$HOSTED" = true ]; then args+=(--hosted); fi
+          if [ "$MAIL" = true ]; then args+=(--mail); fi
+          if [ "$DB" = true ]; then args+=(--db); fi
+          python phase2v_operational.py "${args[@]}"
