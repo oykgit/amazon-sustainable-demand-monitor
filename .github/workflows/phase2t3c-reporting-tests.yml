@@ -1,0 +1,28 @@
+name: Phase 2T.3C Reporting Protection Tests
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ''
+      DATABASE_READER_URL: ''
+      DATABASE_INGESTION_URL: ''
+      DATABASE_ADMIN_URL: ''
+      COMMERCIAL_STORAGE_MODE: legacy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: >-
+          python -m pytest -v tests/test_phase2t3c.py
+          tests/test_automated_research_report.py tests/test_commercial_intelligence.py
+          tests/test_scheduled_review.py tests/test_dashboard_commercial.py
+          tests/test_phase2t3b.py tests/test_commercial_privacy.py
+          tests/test_secure_database.py tests/test_phase2t3a_storage.py
+          tests/test_neon_readiness.py tests/test_database_verification.py
