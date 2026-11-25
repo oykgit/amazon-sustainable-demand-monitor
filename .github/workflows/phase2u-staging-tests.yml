@@ -1,0 +1,39 @@
+name: Phase 2U Controlled Staging Tests
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: phase2u_admin
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: phase2u_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U phase2u_admin -d phase2u_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PHASE2U_LOCAL_PG: '1'
+      DATABASE_URL: ''
+      DATABASE_READER_URL: ''
+      DATABASE_INGESTION_URL: ''
+      DATABASE_ADMIN_URL: ''
+      EBAY_CLIENT_ID: ''
+      EBAY_CLIENT_SECRET: ''
+      EBAY_PHASE2D_AUTH_TEST: '0'
+      BREVO_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt pytest
+      - name: Run staging integration suite
+        run: python -m pytest -v -ra tests/test_phase2u.py tests/test_ebay_phase2q_webhook.py
