@@ -5,7 +5,7 @@ from automatic_candidate_discovery import discover, normalize
 class Response:
     def __enter__(self): return self
     def __exit__(self, *args): return False
-    def read(self):
+    def read(self, limit):
         return json.dumps({'docs': [{'title': 'Example', 'author_name': ['A. Writer'],
           'isbn': ['9780140328721'], 'first_publish_year': 1988}]}).encode()
 

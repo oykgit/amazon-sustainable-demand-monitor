@@ -18,7 +18,7 @@ class ProviderTests(unittest.TestCase):
     def test_bad_shape(self):
         with self.assertRaises(ValueError): validate_payload(b'{}','provider','permission')
     def test_empty_feed(self):
-        result=collect('https://feed.example.org/data','feed.example.org','Sample','Approved',fetcher=lambda _:b'{"observations":[]}')
+        result=collect('https://feed.example.org/data','feed.example.org','Sample','PERM-1',fetcher=lambda _:b'{"observations":[]}')
         self.assertEqual(result['status'],'PREVIEW_COMPLETE')
         self.assertEqual(result['database_writes'],0)
         self.assertEqual(result['accepted'],0)

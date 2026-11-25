@@ -6,7 +6,8 @@ import os
 from datetime import datetime, timezone
 from controlled_collection import inspect_csv, COLUMNS
 from price_history import build_snapshot, FIELDS as PRICE_FIELDS, _init as init_prices
-from persistent_store import _connection
+from persistent_store import storage_transaction, secure_storage_enabled
+from commercial_privacy import validate_feed_row
 
 
 def prepare_feed(content):
@@ -20,6 +21,7 @@ def prepare_feed(content):
     reader = csv.DictReader(io.StringIO(content.decode('utf-8-sig')))
     prepared = []
     for row in reader:
+        row = validate_feed_row(row, allowed_host=os.getenv('AUTHORIZED_FEED_HOST',''), approved_reference=os.getenv('AUTHORIZED_FEED_PERMISSION_REF',''))
         ts = datetime.fromisoformat(row['observed_at_utc'].replace('Z', '+00:00'))
         snapshot = build_snapshot(row['asin'], row['marketplace'], row['selling_price_eur'],
             row['supplier_cost_eur'], row['referral_pct'], row['fulfilment_eur'],
@@ -35,19 +37,18 @@ def ingest_approved_feed(content, expected_sha256, approval, url=None):
     prepared = prepare_feed(content)  # revalidate at write time
     if prepared['sha256'] != expected_sha256:
         raise ValueError('Uploaded CSV differs from the approved preview.')
-    url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise RuntimeError('DATABASE_URL not configured.')
     inserted = 0
-    with _connection(url) as conn:
-        init_prices(conn)
+    with storage_transaction('ingestion', url) as conn:
+        if not secure_storage_enabled():
+            init_prices(conn)
         with conn.cursor() as cur:
-            cur.execute('''CREATE TABLE IF NOT EXISTS asin_price_feed_provenance (
-                asin TEXT NOT NULL, marketplace TEXT NOT NULL, observed_at_utc TEXT NOT NULL,
-                source_note TEXT NOT NULL, source_url TEXT NOT NULL,
-                authorization_reference TEXT NOT NULL, feed_sha256 TEXT NOT NULL,
-                ingested_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                PRIMARY KEY (asin, marketplace, observed_at_utc, source_note))''')
+            if not secure_storage_enabled():
+                cur.execute('''CREATE TABLE IF NOT EXISTS asin_price_feed_provenance (
+                    asin TEXT NOT NULL, marketplace TEXT NOT NULL, observed_at_utc TEXT NOT NULL,
+                    source_note TEXT NOT NULL, source_url TEXT NOT NULL,
+                    authorization_reference TEXT NOT NULL, feed_sha256 TEXT NOT NULL,
+                    ingested_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (asin, marketplace, observed_at_utc, source_note))''')
             for snapshot, source_url, authorization in prepared['rows']:
                 cur.execute('INSERT INTO asin_price_snapshots (' + ','.join(PRICE_FIELDS) +
                     ') VALUES (' + ','.join(['%s'] * len(PRICE_FIELDS)) +
@@ -60,6 +61,8 @@ def ingest_approved_feed(content, expected_sha256, approval, url=None):
                         VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''',
                         (snapshot['asin'],snapshot['marketplace'],snapshot['observed_at_utc'],
                          snapshot['source_note'],source_url,authorization,prepared['sha256']))
+                    if cur.rowcount != 1:
+                        raise RuntimeError('PROVENANCE_CONFLICT')
     return {'mode':'OPERATOR_APPROVED_CSV_INGESTION','feed_sha256':prepared['sha256'],
             'validated':prepared['count'],'inserted':inserted,
             'duplicates_skipped':prepared['count'] - inserted,
