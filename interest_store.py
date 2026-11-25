@@ -2,7 +2,7 @@
 import os
 import re
 import pandas as pd
-from persistent_store import _connection
+from persistent_store import storage_transaction, secure_storage_enabled
 from free_sources import TREND_FIELDS
 
 
@@ -46,13 +46,11 @@ def _init(conn):
 
 def save_interest(frame, url=None):
     d = validate_interest(frame)
-    url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise RuntimeError('DATABASE_URL is not configured')
     inserted = 0
     conflicts = 0
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('ingestion', url) as conn:
+        if not secure_storage_enabled():
+            _init(conn)
         with conn.cursor() as cur:
             for row in d.itertuples(index=False):
                 cur.execute('''INSERT INTO search_interest_observations
@@ -66,13 +64,9 @@ def save_interest(frame, url=None):
 
 
 def load_interest(url=None, limit=10000):
-    url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise RuntimeError('DATABASE_URL is not configured')
     if not isinstance(limit,int) or not 1 <= limit <= 10000:
         raise ValueError('Invalid limit')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('reader', url) as conn:
         with conn.cursor() as cur:
             cur.execute('''SELECT market,keyword,month,search_interest,source
                         FROM search_interest_observations

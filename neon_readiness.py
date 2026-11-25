@@ -1,11 +1,12 @@
 """Read-only Neon search-interest status, separate from repository CSV audit."""
 import os
-from persistent_store import _connection
+from persistent_store import storage_transaction
+
+def _connection(url):
+    return storage_transaction("reader", url)
 
 def read_interest_summary(url=None):
     url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise ValueError('DATABASE_URL is not configured')
     with _connection(url) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('public.search_interest_observations')")

@@ -5,6 +5,8 @@ No Amazon sales, prices or eligibility are inferred from these records.
 """
 import os
 from urllib.parse import urlparse
+from contextlib import contextmanager
+from secure_database import database_transaction, DatabaseAccessError
 
 FIELDS = ('observed_at_utc','barcode','name','brand','quantity','source','source_url',
           'amazon_sales_known','amazon_price_known','amazon_eligibility_known')
@@ -16,11 +18,39 @@ def configured(environ=None):
 
 
 def _connection(url):
+    if secure_storage_enabled():
+        raise DatabaseAccessError("Legacy database path disabled in secure storage mode.")
     from psycopg import connect
     parsed = urlparse(url)
     if parsed.scheme not in ('postgres', 'postgresql') or not parsed.hostname:
         raise ValueError('DATABASE_URL must be a PostgreSQL connection URL.')
     return connect(url, connect_timeout=8)
+
+
+def secure_storage_enabled():
+    mode = os.getenv('COMMERCIAL_STORAGE_MODE', 'legacy')
+    if mode not in ('legacy', 'secure'):
+        raise DatabaseAccessError('Invalid commercial storage mode.')
+    return mode == 'secure'
+
+
+@contextmanager
+def storage_transaction(role, url=None):
+    """Explicit migration switch; never fall back after a secure-mode failure."""
+    if role not in ('reader', 'ingestion'):
+        raise DatabaseAccessError('Invalid storage role.')
+    if secure_storage_enabled():
+        with database_transaction(role) as conn:
+            yield conn
+        return
+    url = url or os.getenv('DATABASE_URL', '')
+    if not url:
+        raise DatabaseAccessError('Legacy database configuration missing.')
+    with _connection(url) as conn:
+        if role == 'reader':
+            with conn.cursor() as cur:
+                cur.execute('SET TRANSACTION READ ONLY')
+        yield conn
 
 
 def _init(conn):
@@ -42,11 +72,9 @@ def _init(conn):
 
 def save_observations(records, url=None):
     """Insert sourced records idempotently; return inserted count."""
-    url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise RuntimeError('Persistent database not configured. Set DATABASE_URL in Render.')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('ingestion', url) as conn:
+        if not secure_storage_enabled():
+            _init(conn)
         inserted = 0
         with conn.cursor() as cur:
             for record in records:
@@ -66,13 +94,9 @@ def save_observations(records, url=None):
 
 
 def load_observations(url=None, limit=10000):
-    url = url or os.environ.get('DATABASE_URL', '')
-    if not url:
-        raise RuntimeError('Persistent database not configured. Set DATABASE_URL in Render.')
     if not isinstance(limit, int) or not 1 <= limit <= 10000:
         raise ValueError('limit must be between 1 and 10000')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('reader', url) as conn:
         with conn.cursor() as cur:
             cur.execute('''SELECT observed_at_utc,barcode,name,brand,quantity,source,source_url,
                         amazon_sales_known,amazon_price_known,amazon_eligibility_known

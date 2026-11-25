@@ -2,7 +2,7 @@
 import os
 from datetime import date, datetime, timedelta, timezone
 from asin_research import validate_asin, validate_marketplace
-from persistent_store import _connection
+from persistent_store import storage_transaction, secure_storage_enabled
 
 FIELDS = ('asin','marketplace','priority','review_interval_days','source_reference','notes','created_at_utc','updated_at_utc')
 PRIORITIES = ('Low','Normal','High')
@@ -30,11 +30,10 @@ def _init(conn):
 def upsert_entry(entry,url=None):
     data=validate_entry(entry['asin'],entry['marketplace'],entry.get('priority','Normal'),
                         entry.get('review_interval_days',7),entry.get('source_reference',''),entry.get('notes',''))
-    url=url or os.environ.get('DATABASE_URL','')
-    if not url: raise RuntimeError('DATABASE_URL not configured.')
     now=datetime.now(timezone.utc).isoformat()
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('ingestion', url) as conn:
+        if not secure_storage_enabled():
+            _init(conn)
         with conn.cursor() as cur:
             cur.execute('''INSERT INTO asin_research_watchlist
                 (asin,marketplace,priority,review_interval_days,source_reference,notes,created_at_utc,updated_at_utc)
@@ -48,10 +47,7 @@ def upsert_entry(entry,url=None):
     return data
 
 def load_entries(url=None):
-    url=url or os.environ.get('DATABASE_URL','')
-    if not url: raise RuntimeError('DATABASE_URL not configured.')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('reader', url) as conn:
         with conn.cursor() as cur:
             cur.execute('SELECT '+','.join(FIELDS)+' FROM asin_research_watchlist ORDER BY updated_at_utc DESC LIMIT 10000')
             return [dict(zip(FIELDS,row)) for row in cur.fetchall()]

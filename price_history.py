@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from asin_research import validate_asin, validate_marketplace
-from persistent_store import _connection
+from persistent_store import storage_transaction, secure_storage_enabled
 
 FIELDS = ('observed_at_utc','asin','marketplace','selling_price_eur','supplier_cost_eur',
           'referral_pct','fulfilment_eur','inbound_eur','other_eur','returns_pct',
@@ -51,10 +51,9 @@ def _init(conn):
           UNIQUE (asin, marketplace, observed_at_utc, source_note))''')
 
 def save_snapshot(snapshot, url=None):
-    url = url or os.environ.get('DATABASE_URL','')
-    if not url: raise RuntimeError('DATABASE_URL not configured.')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('ingestion', url) as conn:
+        if not secure_storage_enabled():
+            _init(conn)
         with conn.cursor() as cur:
             cur.execute('''INSERT INTO asin_price_snapshots (''' + ','.join(FIELDS) + ''')
                 VALUES (''' + ','.join(['%s'] * len(FIELDS)) + ''')
@@ -63,13 +62,10 @@ def save_snapshot(snapshot, url=None):
             return cur.rowcount
 
 def load_snapshots(asin=None, marketplace=None, url=None, limit=1000):
-    url = url or os.environ.get('DATABASE_URL','')
-    if not url: raise RuntimeError('DATABASE_URL not configured.')
     if asin: asin = validate_asin(asin)
     if marketplace: marketplace = validate_marketplace(marketplace)
     if not isinstance(limit,int) or not 1 <= limit <= 10000: raise ValueError('Invalid limit.')
-    with _connection(url) as conn:
-        _init(conn)
+    with storage_transaction('reader', url) as conn:
         clauses=[]; params=[]
         if asin: clauses.append('asin = %s'); params.append(asin)
         if marketplace: clauses.append('marketplace = %s'); params.append(marketplace)
