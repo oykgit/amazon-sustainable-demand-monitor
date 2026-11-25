@@ -1,0 +1,6 @@
+# Phase 2T.4 offline foundation
+Add the four files at their relative paths. Run Phase 2T.4 Restoration Protection Tests manually. No credentials or production changes.
+
+The evaluator checks synthetic manifest coverage, unique obligations, post-restore reconciliation timestamps, zero remaining records and explicit inventory/suspension attestations. It never authorizes production resumption or HTTP acknowledgment. It does not detect restores, enforce suspension, authenticate manifests, verify deletion, or store external evidence. A manifest can omit obligations; an empty manifest is not proof of no account data. Do not use this evaluator as a production gate. Fingerprints identify notifications, not accounts.
+
+Before staging completion: independently authenticate and retain minimal evidence outside the restore domain; establish complete inventory and exact identity mapping; implement enforced suspension across ingestion/reporting and webhook processing; verify reconciliation against isolated PostgreSQL and external stores, including restored completed ledger rows, concurrent processing and omitted obligations. No production restore or deletion is authorized. No raw account identifiers should be retained without an approved necessity and retention policy.
