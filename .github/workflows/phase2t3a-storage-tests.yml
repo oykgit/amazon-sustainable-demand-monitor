@@ -1,18 +1,24 @@
+
 name: Phase 2T.3A Storage Integration Tests
+
 on:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
     env:
       PHASE2T3A_LOCAL_PG: '1'
       DATABASE_URL: ''
       DATABASE_READER_URL: ''
       DATABASE_INGESTION_URL: ''
       DATABASE_ADMIN_URL: ''
+
     services:
       postgres:
         image: postgres:16
@@ -21,14 +27,30 @@ jobs:
           POSTGRES_PASSWORD: local_test_only
           POSTGRES_DB: storage_test
         ports:
-          - 5432:5432
+          - "5432:5432"
         options: >-
-          --health-cmd 'pg_isready -U storage_test -d storage_test'
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U storage_test -d storage_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt pytest
-      - run: python -m pytest -v tests/test_phase2t3a_storage.py tests/test_phase2t3a_postgres.py tests/test_secure_database.py tests/test_commercial_privacy.py tests/test_neon_readiness.py tests/test_database_verification.py tests/test_controlled_ingestion.py
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run storage integration and regression tests
+        run: >
+          python -m pytest -v
+          tests/test_phase2t3a_storage.py
+          tests/test_phase2t3a_postgres.py
+          tests/test_secure_database.py
+          tests/test_commercial_privacy.py
+          tests/test_neon_readiness.py
+          tests/test_database_verification.py
+          tests/test_controlled_ingestion.py
