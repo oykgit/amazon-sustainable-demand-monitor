@@ -1,0 +1,36 @@
+name: Phase 2T.3B Collection Protection Tests
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ''
+      DATABASE_READER_URL: ''
+      DATABASE_INGESTION_URL: ''
+      DATABASE_ADMIN_URL: ''
+      AUTHORIZED_FEED_URL: ''
+      AUTHORIZED_FEED_HOST: ''
+      AUTHORIZED_FEED_PROVIDER: ''
+      AUTHORIZED_FEED_PERMISSION_REF: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: >
+          python -m pytest -v
+          tests/test_phase2t3b.py
+          tests/test_controlled_collection.py
+          tests/test_controlled_ingestion.py
+          tests/test_authorized_provider.py
+          tests/test_automatic_candidate_discovery.py
+          tests/test_commercial_privacy.py
+          tests/test_secure_database.py
+          tests/test_phase2t3a_storage.py
+          tests/test_neon_readiness.py
+          tests/test_database_verification.py
