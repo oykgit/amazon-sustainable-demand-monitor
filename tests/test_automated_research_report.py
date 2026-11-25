@@ -4,9 +4,9 @@ from automated_research_report import summarize
 
 class SummaryTests(unittest.TestCase):
     def test_read_only_scenario_warning(self):
-        rows=[{'asin':'B0D46JP795','marketplace':'UK','observed_at_utc':'2026-11-19T10:00:00+00:00',
-               'selling_price_eur':20,'estimated_profit_eur':4.4,'estimated_roi_pct':55}]
-        out=summarize(rows,[],[],checked_at=datetime(2026,11,19,tzinfo=timezone.utc))
+        rows=[{'asin':'B0D46JP795','marketplace':'UK','observed_at_utc':'2025-11-19T10:00:00+00:00',
+               'selling_price_eur':20,'supplier_cost_eur':8,'referral_pct':15,'fulfilment_eur':3,'inbound_eur':1,'other_eur':0,'returns_pct':3,'estimated_profit_eur':4.4,'estimated_roi_pct':55}]
+        out=summarize(rows,[],[],checked_at=datetime(2025,11,19,12,tzinfo=timezone.utc))
         self.assertEqual(out['products_count'],1)
         self.assertEqual(out['products'][0]['scenario_profit_eur'],4.4)
         self.assertFalse(out['products'][0]['buy_recommendation'])

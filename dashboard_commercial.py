@@ -1,6 +1,7 @@
 """Read-only commercial dashboard view of Neon evidence, using Stage 2B assessment."""
 from automated_research_report import run
-from commercial_intelligence import assess
+from commercial_intelligence import assess, GAPS
+from reporting_guard import bounded, projected
 
 
 def load_dashboard():
@@ -10,7 +11,8 @@ def load_dashboard():
 
 def display_rows(report):
     rows = []
-    for product in report.get('products', []):
+    for raw in bounded(report.get('products')):
+        product=projected(raw)
         rows.append({
             'ASIN': product.get('asin'),
             'Market': product.get('marketplace'),
@@ -18,7 +20,7 @@ def display_rows(report):
             'Estimated profit (EUR)': product.get('scenario_profit_eur'),
             'Estimated ROI (%)': product.get('scenario_roi_pct'),
             'Research priority': product.get('research_priority'),
-            'Evidence gaps': '; '.join(product.get('evidence_gaps') or []),
+            'Evidence gaps': '; '.join(GAPS),
             'Verified buy recommendation': False,
         })
     return rows
