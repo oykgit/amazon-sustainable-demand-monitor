@@ -43,3 +43,13 @@ def test_sanitized_failure(monkeypatch):
 
 def test_missing_database():
     with pytest.raises(v.DatabaseAccessError if hasattr(v,'DatabaseAccessError') else RuntimeError): v.database({})
+
+@pytest.mark.parametrize('role,table,expected',[
+    ('reader',v.PROVENANCE,(False,False,False,False,False)),
+    ('reader',v.WATCHLIST,(True,False,False,False,False)),
+    ('ingestion',v.WATCHLIST,(True,True,False,False,True)),
+    ('ingestion',v.PROVENANCE,(False,True,False,False,False)),
+    ('ingestion','asin_price_snapshots',(False,True,False,False,False)),
+])
+def test_permission_contract(role,table,expected):
+    assert v.expected_table_permissions(role,table)==expected

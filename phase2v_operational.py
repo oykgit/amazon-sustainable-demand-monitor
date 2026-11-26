@@ -39,25 +39,47 @@ def email(env, opener=None):
     result=request_json(Request(BREVO,data=json.dumps(body).encode(),headers={'api-key':key,'Content-Type':'application/json'},method='POST'),201,opener)
     return isinstance(result.get('messageId'),str) and bool(result['messageId'].strip())
 
+CONFLICT_COLUMNS = {
+    'asin_identity_observations': ('source','asin','marketplace','observed_at_utc'),
+    'asin_price_snapshots': ('asin','marketplace','observed_at_utc','source_note'),
+    'catalogue_identity_observations': ('source','barcode','observed_at_utc'),
+    'search_interest_observations': ('market','keyword','month'),
+}
+WATCHLIST = 'asin_research_watchlist'
+PROVENANCE = 'asin_price_feed_provenance'
+
+def expected_table_permissions(role, table):
+    # SELECT, INSERT, DELETE, TRUNCATE, UPDATE
+    if role == 'reader':
+        return (table != PROVENANCE, False, False, False, False)
+    return (table == WATCHLIST, True, False, False, table == WATCHLIST)
+
 def database(env):
-    # Metadata only; do not connect as administrator or attempt writes.
     params=[connection_parameters(r,env) for r in ('reader','ingestion')]
-    if params[0]['user']==params[1]['user'] or any(params[0][k]!=params[1][k] for k in ('host','dbname')):
+    if [p['user'] for p in params] != ['monitor_reader','monitor_ingestion'] or any(params[0][k]!=params[1][k] for k in ('host','dbname')):
         return False
     for role in ('reader','ingestion'):
         with database_transaction(role,environ=env) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user")
-                if cur.fetchone()!=(False,): return False
-                cur.execute("SELECT has_schema_privilege(current_user,'public','CREATE')")
-                if cur.fetchone()!=(False,): return False
-                for table in TABLES:
-                    cur.execute("SELECT to_regclass(%s)",('public.'+table,))
+                cur.execute("SELECT current_user, rolcanlogin AND NOT (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls OR rolinherit) FROM pg_roles WHERE rolname=current_user")
+                if cur.fetchone() != ('monitor_'+role, True): return False
+                cur.execute("SELECT has_schema_privilege(current_user,'public','CREATE'), has_database_privilege(current_user,current_database(),'CREATE'), EXISTS (SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname=current_user))")
+                if cur.fetchone() != (False,False,False): return False
+                for table in TABLES + ('ebay_notification_ledger','playing_with_neon'):
+                    name='public.'+table
+                    cur.execute("SELECT to_regclass(%s)",(name,))
                     if cur.fetchone()[0] is None: return False
-                    cur.execute("SELECT has_table_privilege(current_user,%s,'SELECT'), has_table_privilege(current_user,%s,'INSERT'), has_table_privilege(current_user,%s,'DELETE'), has_table_privilege(current_user,%s,'TRUNCATE'), has_table_privilege(current_user,%s,'UPDATE')",tuple(['public.'+table]*5))
-                    select,insert,delete,truncate,update=cur.fetchone()
-                    if not select or delete or truncate or (role=='reader' and (insert or update)): return False
-                    if role=='ingestion' and not insert: return False
+                    cur.execute("SELECT has_table_privilege(current_user,%s,'SELECT'), has_table_privilege(current_user,%s,'INSERT'), has_table_privilege(current_user,%s,'DELETE'), has_table_privilege(current_user,%s,'TRUNCATE'), has_table_privilege(current_user,%s,'UPDATE')",(name,)*5)
+                    expected=expected_table_permissions(role,table) if table in TABLES else (False,)*5
+                    if cur.fetchone()!=expected: return False
+                    cur.execute("SELECT a.attname, has_column_privilege(current_user,%s,a.attname,'SELECT'), has_column_privilege(current_user,%s,a.attname,'INSERT'), has_column_privilege(current_user,%s,a.attname,'UPDATE') FROM pg_attribute a WHERE a.attrelid=to_regclass(%s) AND a.attnum>0 AND NOT a.attisdropped",(name,)*4)
+                    rows=cur.fetchall()
+                    if not rows: return False
+                    for column,select,insert,update in rows:
+                        if (select,insert,update)!=(expected[0] or (role=='ingestion' and column in CONFLICT_COLUMNS.get(table,())),expected[1],expected[4]): return False
+                    if role=='ingestion' and not set(CONFLICT_COLUMNS.get(table,())).issubset({r[0] for r in rows}): return False
+                cur.execute("SELECT has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','USAGE'), has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','SELECT'), has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','UPDATE')")
+                if cur.fetchone()!=(role=='ingestion',False,False): return False
     return True
 
 def run(*, hosted=False, mail=False, db=False, env=None):
