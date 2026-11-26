@@ -2,8 +2,29 @@
 import argparse
 import json
 import os
+import sys
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from secure_database import database_transaction, connection_parameters
+
+def diagnostic(message):
+    print("DATABASE_DIAGNOSTIC: " + message, file=sys.stderr)
+
+def probe_connector(role):
+    def connect(**params):
+        import psycopg
+        try:
+            conn = psycopg.connect(**params)
+        except Exception as exc:
+            msg = str(exc).lower()
+            category = ("TLS_CERTIFICATE" if any(x in msg for x in ("certificate", "sslrootcert", "ssl error")) else
+                        "AUTHENTICATION" if "authentication" in msg or "password" in msg else
+                        "CONNECTIVITY" if any(x in msg for x in ("timeout", "timed out", "resolve", "network", "connection refused")) else "OTHER_CONNECTION_ERROR")
+            diagnostic(role + ": " + category)
+            raise
+        diagnostic(role + ": CONNECTED")
+        return conn
+    return connect
+
 
 HEALTH = 'https://amazon-monitor-ebay-webhook.onrender.com/health'
 BREVO = 'https://api.brevo.com/v3/smtp/email'
@@ -55,17 +76,24 @@ def expected_table_permissions(role, table):
     return (table == WATCHLIST, True, False, False, table == WATCHLIST)
 
 def database(env):
-    params=[connection_parameters(r,env) for r in ('reader','ingestion')]
+    try:
+        params=[connection_parameters(r,env) for r in ('reader','ingestion')]
+    except Exception:
+        diagnostic('INVALID_OR_MISSING_CONFIGURATION')
+        raise
     if [p['user'] for p in params] != ['monitor_reader','monitor_ingestion'] or any(params[0][k]!=params[1][k] for k in ('host','dbname')):
         return False
     for role in ('reader','ingestion'):
-        with database_transaction(role,environ=env) as conn:
+        with database_transaction(role,environ=env,connector=probe_connector(role)) as conn:
             with conn.cursor() as cur:
+                diagnostic(role + ": ROLE_ATTRIBUTES")
                 cur.execute("SELECT current_user, rolcanlogin AND NOT (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls OR rolinherit) FROM pg_roles WHERE rolname=current_user")
                 if cur.fetchone() != ('monitor_'+role, True): return False
+                diagnostic(role + ": SCHEMA_AND_MEMBERSHIP")
                 cur.execute("SELECT has_schema_privilege(current_user,'public','CREATE'), has_database_privilege(current_user,current_database(),'CREATE'), EXISTS (SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname=current_user))")
                 if cur.fetchone() != (False,False,False): return False
                 for table in TABLES + ('ebay_notification_ledger','playing_with_neon'):
+                    diagnostic(role + ': TABLE ' + table)
                     name='public.'+table
                     cur.execute("SELECT to_regclass(%s)",(name,))
                     if cur.fetchone()[0] is None: return False
@@ -78,6 +106,7 @@ def database(env):
                     for column,select,insert,update in rows:
                         if (select,insert,update)!=(expected[0] or (role=='ingestion' and column in CONFLICT_COLUMNS.get(table,())),expected[1],expected[4]): return False
                     if role=='ingestion' and not set(CONFLICT_COLUMNS.get(table,())).issubset({r[0] for r in rows}): return False
+                diagnostic(role + ": SEQUENCE")
                 cur.execute("SELECT has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','USAGE'), has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','SELECT'), has_sequence_privilege(current_user,'public.asin_price_snapshots_id_seq','UPDATE')")
                 if cur.fetchone()!=(role=='ingestion',False,False): return False
     return True
