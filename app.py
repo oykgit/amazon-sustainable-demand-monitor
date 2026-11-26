@@ -35,7 +35,8 @@ from general_catalogue import preview as preview_general_catalogue, PROVIDERS as
 from upc_provider import lookup as upc_lookup, ProviderFailure as UPCProviderFailure
 from interest_store import save_interest, load_interest, validate_interest
 from consolidated_assessment import consolidate
-from brevo_reporting import configuration_status, send_report
+from brevo_reporting import configuration_status
+from render_email_guard import authorized, verify, ready, send_test
 from dashboard_commercial import load_dashboard, display_rows
 from neon_readiness import read_interest_summary
 from free_sources import (RANK_FIELDS,TREND_FIELDS,import_rank_snapshots,rank_summary,
@@ -114,22 +115,23 @@ if page == 'Overview':
     else:
         st.info('DATABASE_URL is not configured in this deployment.')
 
-    st.subheader('V2.0: Email delivery verification')
-    st.caption('One-time test only; scheduled sending and automatic product research are not yet enabled.')
-    email_status = configuration_status()
-    if all(email_status.values()):
-        st.success('Brevo environment variables are present (authentication not yet tested).')
-        if st.button('Send one Brevo test email', key='brevo_send_test'):
-            try:
-                result = send_report('Smart Product Monitor: email delivery test',
-                    'This is a one-time email delivery test from Amazon Sustainable Demand Monitor. '
-                    'Scheduled research reports and automatic product discovery are not yet enabled.')
-                st.success('Brevo accepted the email request. Check Gmail and Brevo logs for delivery.')
-                st.write('Brevo message ID:', result['message_id'] or '(not returned)')
-            except (ValueError, RuntimeError) as exc:
-                st.error(str(exc))
+    st.subheader('Phase 2V: Protected Render email verification')
+    st.caption('Synthetic test only. No automatic email sending. One send attempt per running process.')
+    token = st.text_input('Email test operator token', type='password', key='phase2v_operator')
+    if authorized(token):
+        if st.button('Verify Brevo authentication and sender', key='phase2v_verify'):
+            st.session_state['phase2v_preflight'] = verify(token)
+        preflight = st.session_state.get('phase2v_preflight')
+        if preflight is not None:
+            st.json(preflight)
+            if ready(preflight):
+                confirmed = st.checkbox('I authorize one synthetic test email', key='phase2v_confirm')
+                if st.button('Send one controlled test email', disabled=not confirmed, key='phase2v_send'):
+                    st.json(send_test(token, confirmed))
+                    st.caption('ACCEPTED means provider acceptance only. Check your inbox before confirming delivery.')
     else:
-        st.warning('Email settings missing: ' + ', '.join(k for k,v in email_status.items() if not v))
+        st.session_state.pop('phase2v_preflight', None)
+        st.info('Operator token required. Email actions are disabled.')
 
     st.subheader('Research overview — repository CSV data')
     st.info('Research-only dashboard. No verified Amazon unit sales, product buy recommendations, or purchasing integration.')

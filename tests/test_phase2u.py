@@ -65,7 +65,8 @@ def deliver(summary, opener):
 class Response:
     def __enter__(self): return self
     def __exit__(self,*args): return False
-    def read(self): return b'{"messageId":"synthetic-message"}'
+    status = 201
+    def read(self, size=-1): return b'{"messageId":"synthetic-message"}'
 
 
 def fake_delivery(request, timeout):

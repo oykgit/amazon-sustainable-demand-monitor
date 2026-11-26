@@ -2,7 +2,8 @@
 import json
 import os
 import re
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener
+from brevo_diagnostic import NoRedirect
 from urllib.error import HTTPError, URLError
 
 API_URL = "https://api.brevo.com/v3/smtp/email"
@@ -32,9 +33,14 @@ def send_report(subject, body, env=None, opener=None):
                            "accept": "application/json", "content-type": "application/json"},
                   method="POST")
     try:
-        with (opener or urlopen)(req, timeout=15) as response:
-            result = json.loads(response.read().decode("utf-8"))
-            return {"accepted": True, "message_id": result.get("messageId", "")}
+        with (opener or build_opener(NoRedirect()).open)(req, timeout=15) as response:
+            raw = response.read(65537)
+            if response.status != 201 or len(raw) > 65536:
+                raise RuntimeError("Email acceptance unconfirmed")
+            result = json.loads(raw)
+            if not isinstance(result, dict) or not isinstance(result.get("messageId"), str) or not result["messageId"].strip():
+                raise RuntimeError("Email acceptance unconfirmed")
+            return {"accepted": True, "message_id": result["messageId"]}
     except HTTPError as exc:
         # Brevo error bodies can contain sensitive details. Only expose a short,
         # restricted error code; never display the raw response or credentials.
