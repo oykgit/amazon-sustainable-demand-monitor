@@ -1,3 +1,4 @@
+import certifi
 import unittest
 from unittest.mock import MagicMock
 from secure_database import database_transaction, connection_parameters, DatabaseAccessError
@@ -9,7 +10,8 @@ class SecureDatabaseTests(unittest.TestCase):
     def test_tls(self):
         p=connection_parameters('reader',ENV)
         self.assertEqual(p['sslmode'],'verify-full')
-        self.assertEqual(p['sslrootcert'],'system')
+        self.assertEqual(p['sslrootcert'],certifi.where())
+        self.assertEqual(p['channel_binding'],'require')
     def test_no_fallback(self):
         with self.assertRaises(DatabaseAccessError): connection_parameters('reader',{'DATABASE_URL':URL})
     def test_invalid_role(self):

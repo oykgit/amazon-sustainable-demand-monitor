@@ -1,5 +1,6 @@
 """Isolated commercial database access. No legacy credential fallback or DDL."""
 import os
+import certifi
 from contextlib import contextmanager
 from urllib.parse import urlsplit
 
@@ -35,7 +36,7 @@ def connection_parameters(role, environ=None):
         if any(not x or '\x00' in x for x in (user, password, db)) or '/' in db:
             raise ValueError()
         return dict(host=host, port=5432, user=user, password=password, dbname=db,
-                    sslmode='verify-full', sslrootcert='system', connect_timeout=8,
+                    sslmode='verify-full', sslrootcert=certifi.where(), channel_binding='require', connect_timeout=8,
                     application_name='amazon_monitor_' + role)
     except (KeyError, ValueError, TypeError, AttributeError):
         raise DatabaseAccessError('Missing or invalid role-specific database configuration.') from None
