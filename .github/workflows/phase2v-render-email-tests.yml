@@ -1,0 +1,21 @@
+name: Phase 2V Render Email Tests
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PHASE2U_LOCAL_PG: '0'
+      DATABASE_URL: ''
+      BREVO_API_KEY: ''
+      EMAIL_TEST_OPERATOR_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: python -m py_compile app.py render_email_guard.py brevo_reporting.py
+      - run: python -m pytest -q tests/test_render_email_guard.py tests/test_brevo_reporting.py tests/test_brevo_diagnostic.py tests/test_phase2v.py tests/test_phase2u.py
