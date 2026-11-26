@@ -76,11 +76,37 @@ def expected_table_permissions(role, table):
     return (table == WATCHLIST, True, False, False, table == WATCHLIST)
 
 def database(env):
-    try:
-        params=[connection_parameters(r,env) for r in ('reader','ingestion')]
-    except Exception:
-        diagnostic('INVALID_OR_MISSING_CONFIGURATION')
-        raise
+    from urllib.parse import urlsplit
+    params = []
+    invalid = False
+    for role in ('reader', 'ingestion'):
+        raw = env.get('DATABASE_' + role.upper() + '_URL', '')
+        try:
+            params.append(connection_parameters(role, env))
+            diagnostic(role + ': CONFIGURATION_VALID')
+        except Exception:
+            invalid = True
+            reason = 'INVALID_FORMAT'
+            if not raw:
+                reason = 'EMPTY_OR_MISSING_SECRET'
+            elif any(ord(c) < 33 for c in raw):
+                reason = 'WHITESPACE_OR_CONTROL_CHARACTER'
+            else:
+                try:
+                    u = urlsplit(raw)
+                    if u.scheme not in ('postgres', 'postgresql'): reason = 'INVALID_SCHEME'
+                    elif not u.hostname: reason = 'MISSING_HOST'
+                    elif not u.username: reason = 'MISSING_USERNAME'
+                    elif not u.password: reason = 'MISSING_PASSWORD'
+                    elif not u.path.strip('/'): reason = 'MISSING_DATABASE'
+                    elif u.query or u.fragment: reason = 'URL_OPTIONS_PRESENT'
+                    elif not u.hostname.endswith('.neon.tech'): reason = 'INVALID_HOST'
+                    elif u.port not in (None, 5432): reason = 'INVALID_PORT'
+                except Exception:
+                    pass
+            diagnostic(role + ': ' + reason)
+    if invalid:
+        raise RuntimeError('Invalid database configuration')
     if [p['user'] for p in params] != ['monitor_reader','monitor_ingestion'] or any(params[0][k]!=params[1][k] for k in ('host','dbname')):
         return False
     for role in ('reader','ingestion'):
