@@ -16,8 +16,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install Neon driver
-        run: python -m pip install 'psycopg[binary]>=3.2,<4'
+      - name: Install application dependencies
+        run: python -m pip install -r requirements.txt
       - name: Produce read-only report
         run: python automated_research_report.py --output automated_research_report.json
       - name: Upload report artifact
