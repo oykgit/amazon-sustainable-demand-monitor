@@ -8,6 +8,7 @@ import json
 import base64
 import binascii
 import os
+import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -17,6 +18,7 @@ from ebay_public_keys import EbayKeyError, EbayPublicKeyClient
 PATH = '/ebay/account-deletion'
 MAX_BODY = 65536
 KEY_CLIENT = EbayPublicKeyClient()
+LOGGER = logging.getLogger("ebay_webhook")
 
 
 def challenge_response(challenge, token, endpoint):
@@ -75,7 +77,16 @@ def authenticate_notification(signature_header, raw_body, key_client=None):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # BaseHTTPRequestHandler includes raw request paths and error text.
+        # Never log untrusted URLs, headers, bodies or identifiers.
+        return
+
     def reply(self, code, payload):
+        route = urlsplit(self.path).path
+        if self.command == "POST" and route == PATH:
+            LOGGER.warning("ebay_notification_http_status=%d outcome=%s", code,
+                           payload.get("error", "unspecified"))
         data = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         self.send_response(code)
         self.send_header('Content-Type', 'application/json')
@@ -87,7 +98,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlsplit(self.path)
         if parsed.path == '/health':
-            return self.reply(200, {'status': 'phase2d_authentication_integrated', 'post_enabled': False})
+            return self.reply(200, {'status': 'phase2d_authentication_integrated', 'post_enabled': False,
+                                    'signature_diagnostic_enabled': os.getenv('EBAY_PHASE2D_AUTH_TEST', '') == '1',
+                                    'oauth_credentials_configured': bool(os.getenv('EBAY_CLIENT_ID') and os.getenv('EBAY_CLIENT_SECRET'))})
         if parsed.path != PATH:
             return self.reply(404, {'error': 'not_found'})
         challenge = parse_qs(parsed.query).get('challenge_code', [''])[0]
